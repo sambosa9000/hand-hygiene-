@@ -166,31 +166,6 @@ function endGame() {
   startButton.textContent = '▶ Play Again';
 }
 
-function winGame() {
-  state.running = false;
-  stopMusic();
-  overlay.style.display = 'grid';
-  overlay.querySelector('h1').textContent = '🎉 You Win!';
-  overlay.querySelector('p').textContent = `You reached ${state.score} points!`;
-  startButton.textContent = '▶ Play Again';
-  
-  // Celebration confetti
-  for (let i = 0; i < 50; i++) {
-    state.particles.push({
-      x: Math.random() * canvas.width,
-      y: canvas.height + 10,
-      vx: (Math.random() - 0.5) * 8,
-      vy: -(Math.random() * 6 + 4),
-      radius: Math.random() * 6 + 2,
-      alpha: 1,
-      color: ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b'][Math.floor(Math.random() * 6)],
-      type: 'confetti',
-      life: 3,
-      maxLife: 3,
-    });
-  }
-}
-
 function addTrail(x, y) {
   state.trails.push({ x, y, alpha: 0.9, radius: 16 });
   if (state.trails.length > 16) state.trails.shift(); // Reduced from 24 to 16
@@ -216,10 +191,6 @@ function sliceEntity(entity) {
   }
   scoreEl.textContent = state.score;
   livesEl.textContent = state.lives;
-  
-  if (state.score >= 10) {
-    winGame();
-  }
 }
 
 function handleInteraction(x, y) {
@@ -279,15 +250,8 @@ function update(delta) {
   state.trails = state.trails.filter(t => t.alpha > 0);
 
   state.particles.forEach(p => {
-    if (p.type === 'confetti') {
-      p.vy += 0.08; // Slower gravity for confetti
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= 0.008; // Slower fade
-    } else {
-      p.vy += 0.15; p.x += p.vx; p.y += p.vy;
-      p.life -= 0.025; // Faster fade for better performance
-    }
+    p.vy += 0.15; p.x += p.vx; p.y += p.vy;
+    p.life -= 0.025; // Faster fade for better performance
     p.alpha = Math.max(0, p.life / p.maxLife);
   });
   state.particles = state.particles.filter(p => p.life > 0);
@@ -374,7 +338,7 @@ function draw() {
       const bh = entity.radius * 1.5, bw = entity.radius * 0.95;
       // Glow halo
       ctx.shadowColor = 'rgba(255,45,120,0.7)';
-      ctx.shadowBlur = 15; // Reduced from 20 to 15
+      ctx.shadowBlur = 20;
       ctx.fillStyle = entity.color;
       ctx.strokeStyle = 'rgba(255,255,255,0.6)';
       ctx.lineWidth = 2.5;
@@ -394,7 +358,7 @@ function draw() {
     } else if (entity.type === 'chocolate') {
       const bw = entity.radius * 1.4, bh = entity.radius * 0.9;
       ctx.shadowColor = 'rgba(255,180,80,0.5)';
-      ctx.shadowBlur = 10; // Reduced from 14 to 10
+      ctx.shadowBlur = 14;
       ctx.fillStyle = entity.color;
       ctx.fillRect(-bw/2, -bh/2, bw, bh);
       ctx.strokeStyle = '#3a200f';
@@ -413,7 +377,7 @@ function draw() {
     } else {
       // Germ – glowing neon circle with spikes
       ctx.shadowColor = entity.color;
-      ctx.shadowBlur = glow + 6; // Reduced from glow + 8 to glow + 6
+      ctx.shadowBlur = glow + 8;
       ctx.fillStyle = entity.color;
       ctx.beginPath();
       ctx.arc(0, 0, entity.radius, 0, Math.PI * 2);

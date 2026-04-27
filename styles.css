@@ -64,23 +64,6 @@ body::after {
   margin: 0 auto;
   padding: 18px 20px;
   z-index: 1;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-@media (max-width: 768px) {
-  .app-shell {
-    max-width: 100vw;
-    padding: 10px;
-    height: auto; /* Allow content to determine height */
-    min-height: 100vh;
-  }
-  
-  html, body {
-    overscroll-behavior: none;
-    -webkit-overscroll-behavior: none;
-  }
 }
 
 header {
@@ -88,22 +71,6 @@ header {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 14px;
-}
-
-@media (max-width: 768px) {
-  header {
-    margin-bottom: 8px;
-  }
-  
-  .logo {
-    font-size: 1.5rem;
-  }
-  
-  .hud-item {
-    font-size: 1.1rem;
-    padding: 4px 12px;
-    min-width: 60px;
-  }
 }
 
 .logo {
@@ -135,13 +102,7 @@ header {
   text-align: center;
 }
 
-main { 
-  position: relative; 
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+main { position: relative; }
 
 canvas {
   width: 100%;
@@ -154,19 +115,6 @@ canvas {
     0 0 30px rgba(0,245,255,0.12),
     0 0 80px rgba(57,255,110,0.08),
     0 24px 60px rgba(0,0,0,0.6);
-  aspect-ratio: 900 / 600;
-  z-index: 1;
-  position: relative;
-}
-
-@media (max-width: 768px) {
-  canvas {
-    width: 100vw;
-    max-width: none;
-    height: auto; /* Let aspect-ratio determine height */
-    aspect-ratio: 900 / 600; /* Maintain 3:2 aspect ratio */
-    max-height: calc(100vh - 80px); /* Ensure it fits in viewport */
-  }
 }
 
 .overlay {
@@ -177,7 +125,6 @@ canvas {
   background: rgba(3, 8, 20, 0.72);
   border-radius: 20px;
   backdrop-filter: blur(6px);
-  z-index: 10;
 }
 
 .overlay-card {
@@ -244,7 +191,67 @@ button:active {
   opacity: 0.55 !important;
 }
 
-@media (max-width: 640px) {
-  .app-shell { padding: 10px; }
-  .logo { font-size: 1.5rem; }
+@media (max-width: 768px) {
+  .app-shell {
+    max-width: 100vw;
+    padding: 10px;
+    height: auto; /* Allow content to determine height */
+    min-height: 100vh;
+  }
+  
+  html, body {
+    overscroll-behavior: none;
+    -webkit-overscroll-behavior: none;
+  }
+  
+  header {
+    margin-bottom: 8px;
+  }
+  
+  .logo {
+    font-size: 1.5rem;
+  }
+  
+  .hud-item {
+    font-size: 1.1rem;
+    padding: 4px 12px;
+    min-width: 60px;
+  }
+}
+
+canvas {
+  width: 100%;
+  max-width: 900px;
+  display: block;
+  border-radius: 20px;
+  border: 1px solid rgba(0,245,255,0.15);
+  box-shadow:
+    0 0 0 1px rgba(57,255,110,0.08),
+    0 0 30px rgba(0,245,255,0.12),
+    0 0 80px rgba(57,255,110,0.08),
+    0 24px 60px rgba(0,0,0,0.6);
+  aspect-ratio: 900 / 600;
+  z-index: 1;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  canvas {
+    width: 100vw;
+    max-width: none;
+    height: auto; /* Let aspect-ratio determine height */
+    aspect-ratio: 900 / 600; /* Maintain 3:2 aspect ratio */
+    max-height: calc(100vh - 80px); /* Ensure it fits in viewport */
+  }
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 8, 20, 0.72);
+  border-radius: 20px;
+  backdrop-filter: blur(6px);
+  z-index: 10;
 }
