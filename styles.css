@@ -155,6 +155,7 @@ canvas {
     0 0 80px rgba(57,255,110,0.08),
     0 24px 60px rgba(0,0,0,0.6);
   aspect-ratio: 900 / 600;
+  touch-action: none; /* Ensure canvas receives touch events */
 }
 
 @media (max-width: 768px) {
@@ -162,7 +163,7 @@ canvas {
     width: 100vw;
     max-width: none;
     height: calc(100vh - 80px);
-    aspect-ratio: auto; /* Allow flexible aspect ratio on mobile */
+    aspect-ratio: 900 / 600; /* Maintain aspect ratio on mobile */
   }
 }
 

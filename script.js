@@ -285,6 +285,7 @@ function getCanvasCoords(e) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
+
   return {
     x: (e.clientX - rect.left) * scaleX,
     y: (e.clientY - rect.top) * scaleY
@@ -316,13 +317,12 @@ canvas.addEventListener('mousedown', e => {
   handleInteraction(coords.x, coords.y);
 });
 
-canvas.addEventListener('touchstart', e => {
+canvas.addEventListener('pointerdown', e => {
   if (!state.running) return;
   e.preventDefault();
-  const touch = e.touches[0];
-  const coords = getCanvasCoords(touch);
+  const coords = getCanvasCoords(e);
   handleInteraction(coords.x, coords.y);
-}, { passive: false });
+});
 
 // Prevent browser navigation
 document.addEventListener('touchstart', e => {
