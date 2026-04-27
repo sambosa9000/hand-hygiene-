@@ -166,6 +166,31 @@ function endGame() {
   startButton.textContent = '▶ Play Again';
 }
 
+function winGame() {
+  state.running = false;
+  stopMusic();
+  overlay.style.display = 'grid';
+  overlay.querySelector('h1').textContent = '🎉 You Win!';
+  overlay.querySelector('p').textContent = `You reached ${state.score} points!`;
+  startButton.textContent = '▶ Play Again';
+  
+  // Celebration confetti
+  for (let i = 0; i < 50; i++) {
+    state.particles.push({
+      x: Math.random() * canvas.width,
+      y: canvas.height + 10,
+      vx: (Math.random() - 0.5) * 8,
+      vy: -(Math.random() * 6 + 4),
+      radius: Math.random() * 6 + 2,
+      alpha: 1,
+      color: ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b'][Math.floor(Math.random() * 6)],
+      type: 'confetti',
+      life: 3,
+      maxLife: 3,
+    });
+  }
+}
+
 function addTrail(x, y) {
   state.trails.push({ x, y, alpha: 0.9, radius: 16 });
   if (state.trails.length > 16) state.trails.shift(); // Reduced from 24 to 16
@@ -191,6 +216,10 @@ function sliceEntity(entity) {
   }
   scoreEl.textContent = state.score;
   livesEl.textContent = state.lives;
+  
+  if (state.score >= 15) {
+    winGame();
+  }
 }
 
 function handleInteraction(x, y) {

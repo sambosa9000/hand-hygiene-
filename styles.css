@@ -194,8 +194,8 @@ button:active {
 @media (max-width: 768px) {
   .app-shell {
     max-width: 100vw;
-    padding: 10px;
-    height: auto; /* Allow content to determine height */
+    padding: 5px; /* Reduced padding */
+    height: auto;
     min-height: 100vh;
   }
   
@@ -205,17 +205,17 @@ button:active {
   }
   
   header {
-    margin-bottom: 8px;
+    margin-bottom: 4px; /* More compact header */
   }
   
   .logo {
-    font-size: 1.5rem;
+    font-size: 1.2rem; /* Smaller logo */
   }
   
   .hud-item {
-    font-size: 1.1rem;
-    padding: 4px 12px;
-    min-width: 60px;
+    font-size: 1rem; /* Smaller HUD */
+    padding: 3px 8px;
+    min-width: 50px;
   }
 }
 
@@ -241,7 +241,7 @@ canvas {
     max-width: none;
     height: auto; /* Let aspect-ratio determine height */
     aspect-ratio: 900 / 600; /* Maintain 3:2 aspect ratio */
-    max-height: calc(100vh - 80px); /* Ensure it fits in viewport */
+    max-height: calc(100vh - 50px); /* Reduced from 80px to 50px for larger canvas */
   }
 }
 
