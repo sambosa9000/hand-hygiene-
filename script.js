@@ -39,7 +39,7 @@ function stopMusic() {
 }
 
 // ─── Background nebulae (static positions, animated via time) ────────────────
-const BG_ORBS = Array.from({ length: 14 }, (_, i) => ({
+const BG_ORBS = Array.from({ length: 8 }, (_, i) => ({ // Reduced from 14 to 8
   x: Math.random(),
   y: Math.random(),
   r: 60 + Math.random() * 120,
@@ -49,12 +49,12 @@ const BG_ORBS = Array.from({ length: 14 }, (_, i) => ({
 }));
 
 // Moving microbe-like blobs in background
-const BG_CELLS = Array.from({ length: 22 }, () => ({
+const BG_CELLS = Array.from({ length: 12 }, () => ({ // Reduced from 22 to 12
   x: Math.random() * 900,
   y: Math.random() * 600,
   r: 8 + Math.random() * 18,
-  vx: (Math.random() - 0.5) * 0.25,
-  vy: (Math.random() - 0.5) * 0.25,
+  vx: (Math.random() - 0.5) * 0.15, // Slower movement
+  vy: (Math.random() - 0.5) * 0.15,
   hue: [160, 190, 280, 120][Math.floor(Math.random() * 4)],
   alpha: 0.04 + Math.random() * 0.07,
   pulse: Math.random() * Math.PI * 2,
@@ -84,19 +84,22 @@ function rand(min, max) { return Math.random() * (max - min) + min; }
 
 // ─── Particles ────────────────────────────────────────────────────────────────
 function createParticles(x, y, type, color) {
-  const count = type === 'germ' ? 10 : 5;
+  // Limit total particles to prevent performance issues
+  if (state.particles.length > 80) return;
+  
+  const count = type === 'germ' ? 6 : 3; // Reduced from 10/5 to 6/3
   for (let i = 0; i < count; i++) {
     const angle = (Math.PI * 2 * i) / count + rand(-0.4, 0.4);
-    const speed = type === 'germ' ? rand(3, 6) : rand(2, 4);
+    const speed = type === 'germ' ? rand(2, 4) : rand(1.5, 3); // Slightly slower particles
     state.particles.push({
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      radius: rand(3, 9),
+      radius: rand(2, 6), // Smaller particles
       alpha: 1,
       color: type === 'germ' ? color : '#ff6b6b',
-      life: 0.7,
-      maxLife: 0.7,
+      life: 0.5, // Shorter life
+      maxLife: 0.5,
     });
   }
 }
@@ -190,7 +193,7 @@ function winGame() {
 
 function addTrail(x, y) {
   state.trails.push({ x, y, alpha: 0.9, radius: 16 });
-  if (state.trails.length > 24) state.trails.shift();
+  if (state.trails.length > 16) state.trails.shift(); // Reduced from 24 to 16
 }
 
 function sliceEntity(entity) {
@@ -283,7 +286,7 @@ function update(delta) {
       p.life -= 0.008; // Slower fade
     } else {
       p.vy += 0.15; p.x += p.vx; p.y += p.vy;
-      p.life -= 0.016;
+      p.life -= 0.025; // Faster fade for better performance
     }
     p.alpha = Math.max(0, p.life / p.maxLife);
   });
@@ -335,10 +338,10 @@ function draw() {
   // ── Grid lines (petri dish feel) ──
   ctx.strokeStyle = 'rgba(0,245,255,0.04)';
   ctx.lineWidth = 1;
-  for (let x = 0; x < canvas.width; x += 60) {
+  for (let x = 0; x < canvas.width; x += 90) { // Reduced from 60 to 90
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
   }
-  for (let y = 0; y < canvas.height; y += 60) {
+  for (let y = 0; y < canvas.height; y += 90) { // Reduced from 60 to 90
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
   }
 
@@ -371,7 +374,7 @@ function draw() {
       const bh = entity.radius * 1.5, bw = entity.radius * 0.95;
       // Glow halo
       ctx.shadowColor = 'rgba(255,45,120,0.7)';
-      ctx.shadowBlur = 20;
+      ctx.shadowBlur = 15; // Reduced from 20 to 15
       ctx.fillStyle = entity.color;
       ctx.strokeStyle = 'rgba(255,255,255,0.6)';
       ctx.lineWidth = 2.5;
@@ -391,7 +394,7 @@ function draw() {
     } else if (entity.type === 'chocolate') {
       const bw = entity.radius * 1.4, bh = entity.radius * 0.9;
       ctx.shadowColor = 'rgba(255,180,80,0.5)';
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 10; // Reduced from 14 to 10
       ctx.fillStyle = entity.color;
       ctx.fillRect(-bw/2, -bh/2, bw, bh);
       ctx.strokeStyle = '#3a200f';
@@ -410,7 +413,7 @@ function draw() {
     } else {
       // Germ – glowing neon circle with spikes
       ctx.shadowColor = entity.color;
-      ctx.shadowBlur = glow + 8;
+      ctx.shadowBlur = glow + 6; // Reduced from glow + 8 to glow + 6
       ctx.fillStyle = entity.color;
       ctx.beginPath();
       ctx.arc(0, 0, entity.radius, 0, Math.PI * 2);
@@ -462,7 +465,7 @@ function draw() {
     ctx.save();
     ctx.globalAlpha = p.alpha;
     ctx.shadowColor = p.color;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 4; // Reduced from 8 to 4
     ctx.fillStyle = p.color;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
@@ -483,7 +486,7 @@ function draw() {
 let lastTime = 0;
 function loop(timestamp) {
   if (!state.running) return;
-  const delta = timestamp - lastTime;
+  const delta = Math.min(timestamp - lastTime, 33); // Cap at ~30fps minimum (33ms)
   lastTime = timestamp;
   update(delta);
   draw();
