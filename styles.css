@@ -19,6 +19,7 @@ body {
   background: var(--bg-deep);
   color: var(--text);
   overflow: hidden;
+  touch-action: none; /* Prevent scrolling/zooming on touch */
 }
 
 /* Animated deep-space / petri-dish background */

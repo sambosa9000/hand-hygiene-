@@ -491,14 +491,51 @@ function loop(timestamp) {
 }
 
 // ─── Input ────────────────────────────────────────────────────────────────────
+function getCanvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY
+  };
+}
+
 canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
   state.pointer.active = true;
-  handleInteraction(e.offsetX, e.offsetY);
+  const coords = getCanvasCoords(e);
+  handleInteraction(coords.x, coords.y);
 });
 canvas.addEventListener('pointermove', e => {
+  e.preventDefault();
   if (!state.pointer.active) return;
-  handleInteraction(e.offsetX, e.offsetY);
+  const coords = getCanvasCoords(e);
+  handleInteraction(coords.x, coords.y);
 });
-canvas.addEventListener('pointerup', () => { state.pointer.active = false; });
+canvas.addEventListener('pointerup', e => {
+  e.preventDefault();
+  state.pointer.active = false;
+});
+
+// Touch events for better mobile support
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  state.pointer.active = true;
+  const touch = e.touches[0];
+  const coords = getCanvasCoords(touch);
+  handleInteraction(coords.x, coords.y);
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!state.pointer.active) return;
+  const touch = e.touches[0];
+  const coords = getCanvasCoords(touch);
+  handleInteraction(coords.x, coords.y);
+});
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  state.pointer.active = false;
+});
 
 startButton.addEventListener('click', startGame);
