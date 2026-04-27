@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>kill the germzzz</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Boogaloo&family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header>
+      <div class="logo">🦠 kill the germzzz</div>
+      <div class="hud">
+        <div class="hud-item">⭐ <span id="score">0</span></div>
+        <div class="hud-item">❤️ <span id="lives">3</span></div>
+      </div>
+    </header>
+    <main>
+      <canvas id="gameCanvas" width="900" height="600"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h1>kill the germzzz</h1>
+          <p>Slice the germs, dodge the Dettol!</p>
+          <button id="startButton">▶ Start Game</button>
+          <p class="hint">Swipe / click the germs. Don't miss — and watch out for bottles!</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Hidden YouTube player -->
+  <div id="yt-player" style="position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;"></div>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="script.js"></script>
+</body>
+</html>
