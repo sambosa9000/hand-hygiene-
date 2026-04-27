@@ -1,31 +1,18 @@
-# Hand Hygiene Slice
+# Kill the Germzzz
 
-A simple browser game inspired by Fruit Ninja, rewritten with a germ-cleaning theme.
+A Fruit Ninja-style game where you slice germs while avoiding Dettol bottles!
 
-- Slice germs to score points.
-- Avoid slicing Dettol bottles.
-- Grey background with subtle soap bubble atmosphere.
-- Gentle ambient music plays while the game runs.
+## How to Play
+- Click or swipe the colorful germs to slice them
+- Avoid the green Dettol bottles - they'll cost you a life!
+- Chocolate bars give bonus points and an extra life
+- Reach 15 points to win!
 
-## Run locally
+## Features
+- Responsive design for mobile and desktop
+- Touch controls optimized for mobile
+- Neon cyberpunk aesthetic
+- Particle effects and animations
 
-Open `index.html` in a browser, or use a local web server for best results.
-
-## Host for Mobile Access
-
-1. **Create a GitHub repository** and upload all files (`index.html`, `script.js`, `styles.css`, `README.md`).
-
-2. **Enable GitHub Pages**:
-   - Go to repository Settings > Pages
-   - Set source to "Deploy from a branch"
-   - Select "main" branch and "/ (root)" folder
-   - Save
-
-3. **Get the live URL** (e.g., `https://yourusername.github.io/hand-hygiene/`)
-
-4. **Generate QR Code**:
-   - Use a free QR code generator like [QR Code Monkey](https://www.qrcode-monkey.com/)
-   - Enter your GitHub Pages URL
-   - Download and share the QR code
-
-Mobile users can scan the QR code to play directly in their browser!
+## Hosting
+Host on GitHub Pages or any static web server.
