@@ -84,22 +84,22 @@ function rand(min, max) { return Math.random() * (max - min) + min; }
 
 // ─── Particles ────────────────────────────────────────────────────────────────
 function createParticles(x, y, type, color) {
-  // Limit total particles to prevent performance issues
-  if (state.particles.length > 80) return;
+  // Limit total particles to prevent performance issues - reduced from 80 to 50
+  if (state.particles.length > 50) return;
   
-  const count = type === 'germ' ? 6 : 3; // Reduced from 10/5 to 6/3
+  const count = type === 'germ' ? 4 : 2; // Further reduced from 6/3 to 4/2
   for (let i = 0; i < count; i++) {
     const angle = (Math.PI * 2 * i) / count + rand(-0.4, 0.4);
-    const speed = type === 'germ' ? rand(2, 4) : rand(1.5, 3); // Slightly slower particles
+    const speed = type === 'germ' ? rand(1.5, 3) : rand(1, 2.5); // Even slower particles
     state.particles.push({
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      radius: rand(2, 6), // Smaller particles
+      radius: rand(1.5, 4), // Even smaller particles
       alpha: 1,
       color: type === 'germ' ? color : '#ff6b6b',
-      life: 0.5, // Shorter life
-      maxLife: 0.5,
+      life: 0.4, // Even shorter life - reduced from 0.5 to 0.4
+      maxLife: 0.4,
     });
   }
 }

@@ -205,17 +205,17 @@ button:active {
   }
   
   header {
-    margin-bottom: 4px; /* More compact header */
+    margin-bottom: 2px; /* Even more compact */
   }
   
   .logo {
-    font-size: 1.2rem; /* Smaller logo */
+    font-size: 1rem; /* Even smaller logo */
   }
   
   .hud-item {
-    font-size: 1rem; /* Smaller HUD */
-    padding: 3px 8px;
-    min-width: 50px;
+    font-size: 0.9rem; /* Even smaller HUD */
+    padding: 2px 6px;
+    min-width: 40px;
   }
 }
 
@@ -241,7 +241,7 @@ canvas {
     max-width: none;
     height: auto; /* Let aspect-ratio determine height */
     aspect-ratio: 900 / 600; /* Maintain 3:2 aspect ratio */
-    max-height: calc(100vh - 50px); /* Reduced from 80px to 50px for larger canvas */
+    max-height: calc(100vh - 35px); /* Even larger - reduced from 50px to 35px */
   }
 }
 
