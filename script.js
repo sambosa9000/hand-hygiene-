@@ -501,6 +501,25 @@ function getCanvasCoords(e) {
   };
 }
 
+// Prevent browser navigation and scrolling
+document.addEventListener('touchstart', e => {
+  if (e.target === canvas || canvas.contains(e.target)) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+document.addEventListener('touchmove', e => {
+  if (e.target === canvas || canvas.contains(e.target)) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+document.addEventListener('touchend', e => {
+  if (e.target === canvas || canvas.contains(e.target)) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
 canvas.addEventListener('pointerdown', e => {
   e.preventDefault();
   state.pointer.active = true;
