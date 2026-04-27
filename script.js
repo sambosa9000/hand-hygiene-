@@ -1,47 +1,104 @@
-// ─── DOM Elements ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const overlay = document.getElementById('overlay');
 const startButton = document.getElementById('startButton');
+const overlay = document.getElementById('overlay');
 const scoreEl = document.getElementById('score');
 const livesEl = document.getElementById('lives');
 
-// ─── Game State ───────────────────────────────────────────────────────────────
-let state = {
-  score: 0,
-  lives: 3,
-  entities: [],
-  particles: [],
-  running: false,
-  time: 0,
-  lastSpawn: 0,
-  spawnInterval: 1000,
+// ─── YouTube Player ───────────────────────────────────────────────────────────
+let ytPlayer = null;
+let ytReady = false;
+
+window.onYouTubeIframeAPIReady = function () {
+  ytPlayer = new YT.Player('yt-player', {
+    videoId: 'DzYp5uqixz0',
+    playerVars: {
+      autoplay: 0,
+      loop: 1,
+      playlist: 'DzYp5uqixz0',
+      controls: 0,
+      disablekb: 1,
+    },
+    events: {
+      onReady: () => { ytReady = true; },
+    },
+  });
 };
 
-// ─── Colors and Constants ─────────────────────────────────────────────────────
-const germColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b'];
+function playMusic() {
+  if (ytReady && ytPlayer && ytPlayer.playVideo) {
+    ytPlayer.setVolume(60);
+    ytPlayer.playVideo();
+  }
+}
+
+function stopMusic() {
+  if (ytReady && ytPlayer && ytPlayer.pauseVideo) {
+    ytPlayer.pauseVideo();
+  }
+}
+
+// ─── Background nebulae (static positions, animated via time) ────────────────
+const BG_ORBS = Array.from({ length: 8 }, (_, i) => ({ // Reduced from 14 to 8
+  x: Math.random(),
+  y: Math.random(),
+  r: 60 + Math.random() * 120,
+  hue: [160, 190, 280, 320, 140][i % 5],
+  speed: 0.0003 + Math.random() * 0.0004,
+  phase: Math.random() * Math.PI * 2,
+}));
+
+// Moving microbe-like blobs in background
+const BG_CELLS = Array.from({ length: 12 }, () => ({ // Reduced from 22 to 12
+  x: Math.random() * 900,
+  y: Math.random() * 600,
+  r: 8 + Math.random() * 18,
+  vx: (Math.random() - 0.5) * 0.15, // Slower movement
+  vy: (Math.random() - 0.5) * 0.15,
+  hue: [160, 190, 280, 120][Math.floor(Math.random() * 4)],
+  alpha: 0.04 + Math.random() * 0.07,
+  pulse: Math.random() * Math.PI * 2,
+}));
+
+// ─── Game State ───────────────────────────────────────────────────────────────
+const state = {
+  score: 0,
+  lives: 3,
+  running: false,
+  entities: [],
+  trails: [],
+  particles: [],
+  shakeAmount: 0,
+  bottleHitFlash: 0,
+  lastSpawn: 0,
+  spawnInterval: 1000,
+  pointer: { x: 0, y: 0, active: false },
+  time: 0,
+};
+
+const germColors = ['#39ff6e','#00f5ff','#ff2d78','#b44fff','#f7ff00','#ff8c00','#40e0ff','#7fff00'];
 const dettolColor = '#9fd2b7';
 const chocolateColor = '#6b4c3a';
 
-// ─── Utility Functions ────────────────────────────────────────────────────────
 function rand(min, max) { return Math.random() * (max - min) + min; }
 
 // ─── Particles ────────────────────────────────────────────────────────────────
 function createParticles(x, y, type, color) {
+  // Limit total particles to prevent performance issues
   if (state.particles.length > 80) return;
-
-  const count = type === 'germ' ? 6 : 3;
+  
+  const count = type === 'germ' ? 6 : 3; // Reduced from 10/5 to 6/3
   for (let i = 0; i < count; i++) {
     const angle = (Math.PI * 2 * i) / count + rand(-0.4, 0.4);
-    const speed = type === 'germ' ? rand(2, 4) : rand(1.5, 3);
+    const speed = type === 'germ' ? rand(2, 4) : rand(1.5, 3); // Slightly slower particles
     state.particles.push({
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      radius: rand(2, 6),
+      radius: rand(2, 6), // Smaller particles
       alpha: 1,
       color: type === 'germ' ? color : '#ff6b6b',
-      life: 0.5,
+      life: 0.5, // Shorter life
       maxLife: 0.5,
     });
   }
@@ -49,7 +106,7 @@ function createParticles(x, y, type, color) {
 
 // ─── Entity creation ──────────────────────────────────────────────────────────
 function createEntity() {
-  const chocolateChance = Math.random() < 0.005;
+  const chocolateChance = Math.random() < 0.005; // Reduced from 0.01 to 0.005 (0.5%)
   const isDettol = !chocolateChance && Math.random() < 0.24;
   const radius = isDettol ? rand(24, 34) : chocolateChance ? rand(18, 26) : rand(20, 32);
   const x = rand(radius, canvas.width - radius);
@@ -58,9 +115,9 @@ function createEntity() {
   else if (chocolateChance) { type = 'chocolate'; color = chocolateColor; }
 
   return {
-    x, y: canvas.height + radius, // Spawn from below the screen
+    x, y: canvas.height + radius,
     vx: rand(-0.9, 0.9),
-    vy: rand(-11.5, -14.0), // Original speed (before 25% increase)
+    vy: rand(-12.5, -15.5), // Increased speed: was -11.5 to -14.0
     radius, type,
     rotation: rand(0, Math.PI * 2),
     angularVelocity: rand(-0.04, 0.04),
@@ -69,20 +126,40 @@ function createEntity() {
   };
 }
 
-// ─── Game Logic ───────────────────────────────────────────────────────────────
+// ─── Pop sound ────────────────────────────────────────────────────────────────
+function playPop(freq = 460) {
+  try {
+    const pop = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = pop.createOscillator();
+    const gain = pop.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.08, pop.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, pop.currentTime + 0.1);
+    osc.connect(gain).connect(pop.destination);
+    osc.start();
+    osc.stop(pop.currentTime + 0.12);
+    setTimeout(() => pop.close(), 200);
+  } catch (e) {}
+}
+
+// ─── Game logic ───────────────────────────────────────────────────────────────
 function startGame() {
   state.score = 0; state.lives = 3;
-  state.entities = []; state.particles = [];
+  state.entities = []; state.trails = []; state.particles = [];
+  state.shakeAmount = 0; state.bottleHitFlash = 0;
+  state.lastSpawn = 0; state.spawnInterval = 1500;
   state.running = true; state.time = 0;
-  state.lastSpawn = 0; state.spawnInterval = 1000;
   overlay.style.display = 'none';
   scoreEl.textContent = 0;
   livesEl.textContent = 3;
+  playMusic();
   requestAnimationFrame(loop);
 }
 
 function endGame() {
   state.running = false;
+  stopMusic();
   overlay.style.display = 'grid';
   overlay.querySelector('h1').textContent = 'Game Over';
   overlay.querySelector('p').textContent = `You scored ${state.score} points!`;
@@ -91,10 +168,32 @@ function endGame() {
 
 function winGame() {
   state.running = false;
+  stopMusic();
   overlay.style.display = 'grid';
   overlay.querySelector('h1').textContent = '🎉 You Win!';
   overlay.querySelector('p').textContent = `You reached ${state.score} points!`;
   startButton.textContent = '▶ Play Again';
+  
+  // Celebration confetti
+  for (let i = 0; i < 50; i++) {
+    state.particles.push({
+      x: Math.random() * canvas.width,
+      y: canvas.height + 10,
+      vx: (Math.random() - 0.5) * 8,
+      vy: -(Math.random() * 6 + 4),
+      radius: Math.random() * 6 + 2,
+      alpha: 1,
+      color: ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b'][Math.floor(Math.random() * 6)],
+      type: 'confetti',
+      life: 3,
+      maxLife: 3,
+    });
+  }
+}
+
+function addTrail(x, y) {
+  state.trails.push({ x, y, alpha: 0.9, radius: 16 });
+  if (state.trails.length > 16) state.trails.shift(); // Reduced from 24 to 16
 }
 
 function sliceEntity(entity) {
@@ -102,26 +201,50 @@ function sliceEntity(entity) {
   if (entity.type === 'germ') {
     state.score += 1;
     createParticles(entity.x, entity.y, 'germ', entity.color);
+    playPop(400 + Math.random() * 200);
   } else if (entity.type === 'chocolate') {
     state.score += 5;
     state.lives += 1;
     createParticles(entity.x, entity.y, 'chocolate', '#d4a574');
+    playPop(600);
   } else {
     state.lives -= 1;
+    state.shakeAmount = 10;
+    state.bottleHitFlash = 0.7;
     createParticles(entity.x, entity.y, 'bottle', '#ff2d78');
     if (state.lives <= 0) { endGame(); return; }
   }
   scoreEl.textContent = state.score;
   livesEl.textContent = state.lives;
-
-  if (state.score >= 10) { // Reverted target back to 10
+  
+  if (state.score >= 10) {
     winGame();
   }
 }
 
+function handleInteraction(x, y) {
+  addTrail(x, y);
+  state.entities.forEach(e => {
+    if (e.sliced) return;
+    if (Math.hypot(e.x - x, e.y - y) < e.radius + 18) sliceEntity(e);
+  });
+}
+
+// ─── Update ───────────────────────────────────────────────────────────────────
 function update(delta) {
   if (!state.running) return;
   state.time += delta * 0.001;
+
+  // Update background cells
+  BG_CELLS.forEach(c => {
+    c.x += c.vx;
+    c.y += c.vy;
+    c.pulse += 0.02;
+    if (c.x < -50) c.x = canvas.width + 50;
+    if (c.x > canvas.width + 50) c.x = -50;
+    if (c.y < -50) c.y = canvas.height + 50;
+    if (c.y > canvas.height + 50) c.y = -50;
+  });
 
   state.lastSpawn += delta;
   if (state.lastSpawn > state.spawnInterval) {
@@ -131,7 +254,7 @@ function update(delta) {
   }
 
   state.entities.forEach(e => {
-    e.vy += 0.18; // Gravity - eventually makes them fall back down
+    e.vy += 0.18;
     e.x += e.vx;
     e.y += e.vy;
     e.rotation += e.angularVelocity;
@@ -152,63 +275,145 @@ function update(delta) {
     return true;
   });
 
+  state.trails.forEach(t => { t.alpha -= 0.04; t.radius += 0.5; });
+  state.trails = state.trails.filter(t => t.alpha > 0);
+
   state.particles.forEach(p => {
-    p.vy += 0.15; p.x += p.vx; p.y += p.vy;
-    p.life -= 0.025;
+    if (p.type === 'confetti') {
+      p.vy += 0.08; // Slower gravity for confetti
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.008; // Slower fade
+    } else {
+      p.vy += 0.15; p.x += p.vx; p.y += p.vy;
+      p.life -= 0.025; // Faster fade for better performance
+    }
     p.alpha = Math.max(0, p.life / p.maxLife);
   });
   state.particles = state.particles.filter(p => p.life > 0);
+
+  state.shakeAmount *= 0.9;
+  state.bottleHitFlash = Math.max(0, state.bottleHitFlash - 0.04);
 }
 
-// ─── Rendering ───────────────────────────────────────────────────────────────
+// ─── Draw ─────────────────────────────────────────────────────────────────────
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const sx = (Math.random() - 0.5) * state.shakeAmount;
+  const sy = (Math.random() - 0.5) * state.shakeAmount;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.clearRect(-sx, -sy, canvas.width, canvas.height);
 
-  // Background
+  // ── Deep space base ──
   ctx.fillStyle = '#050d1a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(-sx, -sy, canvas.width, canvas.height);
 
-  // Grid
+  // ── Animated radial nebulae ──
+  BG_ORBS.forEach(orb => {
+    const pulse = Math.sin(state.time * orb.speed * 6283 + orb.phase) * 0.3 + 0.7;
+    const grd = ctx.createRadialGradient(
+      orb.x * canvas.width, orb.y * canvas.height, 0,
+      orb.x * canvas.width, orb.y * canvas.height, orb.r * pulse
+    );
+    grd.addColorStop(0, `hsla(${orb.hue}, 100%, 60%, 0.12)`);
+    grd.addColorStop(1, `hsla(${orb.hue}, 100%, 40%, 0)`);
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(orb.x * canvas.width, orb.y * canvas.height, orb.r * pulse, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // ── Floating microbe blobs (background) ──
+  BG_CELLS.forEach(c => {
+    const pr = c.r * (1 + 0.15 * Math.sin(c.pulse));
+    const grd = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, pr);
+    grd.addColorStop(0, `hsla(${c.hue}, 100%, 65%, ${c.alpha * 1.5})`);
+    grd.addColorStop(1, `hsla(${c.hue}, 100%, 50%, 0)`);
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, pr, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // ── Grid lines (petri dish feel) ──
   ctx.strokeStyle = 'rgba(0,245,255,0.04)';
   ctx.lineWidth = 1;
-  for (let x = 0; x < canvas.width; x += 90) {
+  for (let x = 0; x < canvas.width; x += 90) { // Reduced from 60 to 90
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
   }
-  for (let y = 0; y < canvas.height; y += 90) {
+  for (let y = 0; y < canvas.height; y += 90) { // Reduced from 60 to 90
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
   }
 
-  // Entities
+  // ── Danger tint when low lives ──
+  if (state.lives <= 2) {
+    ctx.fillStyle = `rgba(255, 45, 120, ${0.12 * (3 - state.lives)})`;
+    ctx.fillRect(-sx, -sy, canvas.width, canvas.height);
+  }
+
+  // ── Slice trails ──
+  state.trails.forEach(t => {
+    const grd = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, t.radius);
+    grd.addColorStop(0, `rgba(0,245,255,${t.alpha * 0.8})`);
+    grd.addColorStop(1, `rgba(57,255,110,0)`);
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // ── Entities ──
   state.entities.forEach(entity => {
     ctx.save();
     ctx.translate(entity.x, entity.y);
     ctx.rotate(entity.rotation);
 
+    const glow = 6 + 4 * Math.sin(entity.glowPhase);
+
     if (entity.type === 'dettol') {
       const bh = entity.radius * 1.5, bw = entity.radius * 0.95;
+      // Glow halo
+      ctx.shadowColor = 'rgba(255,45,120,0.7)';
+      ctx.shadowBlur = 15; // Reduced from 20 to 15
       ctx.fillStyle = entity.color;
       ctx.strokeStyle = 'rgba(255,255,255,0.6)';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.roundRect(-bw/2, -bh/2, bw, bh, entity.radius * 0.18);
       ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 0;
       ctx.fillStyle = '#f8fbfc';
       ctx.fillRect(-bw/2+3, -bh/2+4, bw-6, bh*0.3);
       ctx.fillStyle = '#2a524a';
       ctx.font = `bold ${Math.max(10, entity.radius * 0.35)}px Nunito`;
       ctx.textAlign = 'center';
       ctx.fillText('Dettol', 0, -bh*0.04);
+      ctx.fillStyle = '#ddeee8';
+      ctx.fillRect(-bw/6, bh*0.2, bw/3, bh*0.14);
+
     } else if (entity.type === 'chocolate') {
       const bw = entity.radius * 1.4, bh = entity.radius * 0.9;
+      ctx.shadowColor = 'rgba(255,180,80,0.5)';
+      ctx.shadowBlur = 10; // Reduced from 14 to 10
       ctx.fillStyle = entity.color;
       ctx.fillRect(-bw/2, -bh/2, bw, bh);
       ctx.strokeStyle = '#3a200f';
       ctx.lineWidth = 2;
       ctx.strokeRect(-bw/2, -bh/2, bw, bh);
+      ctx.shadowBlur = 0;
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 4; c++) {
+          const px = -bw/2 + (bw/4)*c + bw/8;
+          const py = -bh/2 + (bh/3)*r + bh/6;
+          ctx.fillStyle = '#8b6a47';
+          ctx.fillRect(px - bw/12, py - bh/10, bw/6, bh/5);
+        }
+      }
+
     } else {
-      // Germ
+      // Germ – glowing neon circle with spikes
       ctx.shadowColor = entity.color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = glow + 6; // Reduced from glow + 8 to glow + 6
       ctx.fillStyle = entity.color;
       ctx.beginPath();
       ctx.arc(0, 0, entity.radius, 0, Math.PI * 2);
@@ -255,76 +460,51 @@ function draw() {
     ctx.restore();
   });
 
-  // Particles
+  // ── Particles ──
   state.particles.forEach(p => {
     ctx.save();
     ctx.globalAlpha = p.alpha;
     ctx.shadowColor = p.color;
-    ctx.shadowBlur = 4;
+    ctx.shadowBlur = 4; // Reduced from 8 to 4
     ctx.fillStyle = p.color;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   });
+
+  // ── Hit flash ──
+  if (state.bottleHitFlash > 0) {
+    ctx.fillStyle = `rgba(255, 45, 120, ${0.35 * state.bottleHitFlash})`;
+    ctx.fillRect(-sx, -sy, canvas.width, canvas.height);
+  }
+
+  ctx.restore();
 }
 
-// ─── Game Loop ───────────────────────────────────────────────────────────────
+// ─── Loop ─────────────────────────────────────────────────────────────────────
 let lastTime = 0;
 function loop(timestamp) {
   if (!state.running) return;
-  const delta = Math.min(timestamp - lastTime, 33);
+  const delta = Math.min(timestamp - lastTime, 33); // Cap at ~30fps minimum (33ms)
   lastTime = timestamp;
   update(delta);
   draw();
   requestAnimationFrame(loop);
 }
 
-// ─── Input Handling ──────────────────────────────────────────────────────────
+// ─── Input ────────────────────────────────────────────────────────────────────
 function getCanvasCoords(e) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
-
   return {
     x: (e.clientX - rect.left) * scaleX,
     y: (e.clientY - rect.top) * scaleY
   };
 }
 
-function handleInteraction(x, y) {
-  for (let i = state.entities.length - 1; i >= 0; i--) {
-    const entity = state.entities[i];
-    if (entity.sliced) continue;
-
-    const dx = x - entity.x;
-    const dy = y - entity.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance < entity.radius) {
-      sliceEntity(entity);
-      return;
-    }
-  }
-}
-
-// Event listeners
-startButton.addEventListener('click', startGame);
-
-canvas.addEventListener('mousedown', e => {
-  if (!state.running) return;
-  const coords = getCanvasCoords(e);
-  handleInteraction(coords.x, coords.y);
-});
-
-canvas.addEventListener('pointerdown', e => {
-  if (!state.running) return;
-  e.preventDefault();
-  const coords = getCanvasCoords(e);
-  handleInteraction(coords.x, coords.y);
-});
-
-// Prevent browser navigation
+// Prevent browser navigation and scrolling
 document.addEventListener('touchstart', e => {
   if (e.target === canvas || canvas.contains(e.target)) {
     e.preventDefault();
@@ -342,3 +522,42 @@ document.addEventListener('touchend', e => {
     e.preventDefault();
   }
 }, { passive: false });
+
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  state.pointer.active = true;
+  const coords = getCanvasCoords(e);
+  handleInteraction(coords.x, coords.y);
+});
+canvas.addEventListener('pointermove', e => {
+  e.preventDefault();
+  if (!state.pointer.active) return;
+  const coords = getCanvasCoords(e);
+  handleInteraction(coords.x, coords.y);
+});
+canvas.addEventListener('pointerup', e => {
+  e.preventDefault();
+  state.pointer.active = false;
+});
+
+// Touch events for better mobile support
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  state.pointer.active = true;
+  const touch = e.touches[0];
+  const coords = getCanvasCoords(touch);
+  handleInteraction(coords.x, coords.y);
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!state.pointer.active) return;
+  const touch = e.touches[0];
+  const coords = getCanvasCoords(touch);
+  handleInteraction(coords.x, coords.y);
+});
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  state.pointer.active = false;
+});
+
+startButton.addEventListener('click', startGame);
