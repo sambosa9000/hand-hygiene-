@@ -103,7 +103,7 @@ function createParticles(x, y, type, color) {
 
 // ─── Entity creation ──────────────────────────────────────────────────────────
 function createEntity() {
-  const chocolateChance = Math.random() < 0.01;
+  const chocolateChance = Math.random() < 0.005; // Reduced from 0.01 to 0.005 (0.5%)
   const isDettol = !chocolateChance && Math.random() < 0.24;
   const radius = isDettol ? rand(24, 34) : chocolateChance ? rand(18, 26) : rand(20, 32);
   const x = rand(radius, canvas.width - radius);
@@ -114,7 +114,7 @@ function createEntity() {
   return {
     x, y: canvas.height + radius,
     vx: rand(-0.9, 0.9),
-    vy: rand(-11.5, -14.0),
+    vy: rand(-12.5, -15.5), // Increased speed: was -11.5 to -14.0
     radius, type,
     rotation: rand(0, Math.PI * 2),
     angularVelocity: rand(-0.04, 0.04),

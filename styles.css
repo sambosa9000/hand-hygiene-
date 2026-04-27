@@ -161,9 +161,8 @@ canvas {
   canvas {
     width: 100vw;
     max-width: none;
-    height: auto; /* Let aspect-ratio determine height */
-    aspect-ratio: 900 / 600; /* Maintain 3:2 aspect ratio */
-    max-height: calc(100vh - 80px); /* Ensure it fits in viewport */
+    height: calc(100vh - 80px);
+    aspect-ratio: auto; /* Allow flexible aspect ratio on mobile */
   }
 }
 
