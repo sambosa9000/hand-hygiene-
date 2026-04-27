@@ -155,14 +155,17 @@ canvas {
     0 0 80px rgba(57,255,110,0.08),
     0 24px 60px rgba(0,0,0,0.6);
   aspect-ratio: 900 / 600;
+  z-index: 1;
+  position: relative;
 }
 
 @media (max-width: 768px) {
   canvas {
     width: 100vw;
     max-width: none;
-    height: calc(100vh - 80px);
-    aspect-ratio: auto; /* Allow flexible aspect ratio on mobile */
+    height: auto; /* Let aspect-ratio determine height */
+    aspect-ratio: 900 / 600; /* Maintain 3:2 aspect ratio */
+    max-height: calc(100vh - 80px); /* Ensure it fits in viewport */
   }
 }
 
@@ -174,6 +177,7 @@ canvas {
   background: rgba(3, 8, 20, 0.72);
   border-radius: 20px;
   backdrop-filter: blur(6px);
+  z-index: 10;
 }
 
 .overlay-card {

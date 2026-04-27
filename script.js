@@ -496,11 +496,13 @@ function loop(timestamp) {
 // ─── Input ────────────────────────────────────────────────────────────────────
 function getCanvasCoords(e) {
   const rect = canvas.getBoundingClientRect();
+  const clientX = e.clientX || e.pageX || 0;
+  const clientY = e.clientY || e.pageY || 0;
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
   return {
-    x: (e.clientX - rect.left) * scaleX,
-    y: (e.clientY - rect.top) * scaleY
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
   };
 }
 
@@ -523,41 +525,34 @@ document.addEventListener('touchend', e => {
   }
 }, { passive: false });
 
-canvas.addEventListener('pointerdown', e => {
+// Unified touch/pointer handling
+function handlePointerDown(e) {
   e.preventDefault();
   state.pointer.active = true;
-  const coords = getCanvasCoords(e);
+  const coords = getCanvasCoords(e.touches ? e.touches[0] : e);
   handleInteraction(coords.x, coords.y);
-});
-canvas.addEventListener('pointermove', e => {
-  e.preventDefault();
-  if (!state.pointer.active) return;
-  const coords = getCanvasCoords(e);
-  handleInteraction(coords.x, coords.y);
-});
-canvas.addEventListener('pointerup', e => {
-  e.preventDefault();
-  state.pointer.active = false;
-});
+}
 
-// Touch events for better mobile support
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  state.pointer.active = true;
-  const touch = e.touches[0];
-  const coords = getCanvasCoords(touch);
-  handleInteraction(coords.x, coords.y);
-});
-canvas.addEventListener('touchmove', e => {
+function handlePointerMove(e) {
   e.preventDefault();
   if (!state.pointer.active) return;
-  const touch = e.touches[0];
-  const coords = getCanvasCoords(touch);
+  const coords = getCanvasCoords(e.touches ? e.touches[0] : e);
   handleInteraction(coords.x, coords.y);
-});
-canvas.addEventListener('touchend', e => {
+}
+
+function handlePointerUp(e) {
   e.preventDefault();
   state.pointer.active = false;
-});
+}
+
+// Pointer events (mouse/stylus)
+canvas.addEventListener('pointerdown', handlePointerDown);
+canvas.addEventListener('pointermove', handlePointerMove);
+canvas.addEventListener('pointerup', handlePointerUp);
+
+// Touch events for mobile
+canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
+canvas.addEventListener('touchend', handlePointerUp, { passive: false });
 
 startButton.addEventListener('click', startGame);
