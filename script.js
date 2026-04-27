@@ -60,7 +60,7 @@ function createEntity() {
   return {
     x, y: canvas.height + radius, // Spawn from below the screen
     vx: rand(-0.9, 0.9),
-    vy: rand(-12, -15), // Start moving upward (negative = up)
+    vy: rand(-11.5, -14.0), // Original speed (before 25% increase)
     radius, type,
     rotation: rand(0, Math.PI * 2),
     angularVelocity: rand(-0.04, 0.04),
@@ -114,7 +114,7 @@ function sliceEntity(entity) {
   scoreEl.textContent = state.score;
   livesEl.textContent = state.lives;
 
-  if (state.score >= 15) {
+  if (state.score >= 10) { // Reverted target back to 10
     winGame();
   }
 }
