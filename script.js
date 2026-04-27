@@ -117,7 +117,7 @@ function createEntity() {
   return {
     x, y: canvas.height + radius,
     vx: rand(-0.9, 0.9),
-    vy: rand(-12.5, -15.5), // Increased speed: was -11.5 to -14.0
+    vy: rand(-15.625, -19.375), // 25% speed increase: was -12.5 to -15.5
     radius, type,
     rotation: rand(0, Math.PI * 2),
     angularVelocity: rand(-0.04, 0.04),
@@ -217,7 +217,7 @@ function sliceEntity(entity) {
   scoreEl.textContent = state.score;
   livesEl.textContent = state.lives;
   
-  if (state.score >= 10) {
+  if (state.score >= 15) { // Increased target from 10 to 15
     winGame();
   }
 }
