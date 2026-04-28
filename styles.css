@@ -26,6 +26,7 @@ html, body {
   top: 0; left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh; /* overrides above on browsers that support it */
   display: block;
   touch-action: none;
 }
@@ -36,12 +37,24 @@ html, body {
   top: 0; left: 0; right: 0;
   z-index: 20;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px 14px 4px;
+  background: linear-gradient(to bottom, rgba(5,13,26,0.88) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.hud-top {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  /* fade to transparent so game shows through */
-  background: linear-gradient(to bottom, rgba(5,13,26,0.82) 0%, transparent 100%);
-  pointer-events: none;
+  width: 100%;
+}
+
+.hud-bottom {
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
 }
 
 .logo {
@@ -209,9 +222,9 @@ button:active { transform: scale(0.96); }
 
 .team-name {
   font-family: 'Boogaloo', cursive;
-  font-size: clamp(0.75rem, 3vw, 1rem);
+  font-size: clamp(0.8rem, 3.5vw, 1.05rem);
   color: #00f5ff;
-  text-shadow: 0 0 8px rgba(0,245,255,0.6);
-  letter-spacing: 0.04em;
-  opacity: 0.85;
+  text-shadow: 0 0 8px rgba(0,245,255,0.7), 0 0 18px rgba(0,245,255,0.3);
+  letter-spacing: 0.06em;
+  opacity: 0.9;
 }

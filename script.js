@@ -3,11 +3,16 @@ const canvas  = document.getElementById('gameCanvas');
 const ctx     = canvas.getContext('2d');
 
 function resizeCanvas() {
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const vp = window.visualViewport;
+  canvas.width  = vp ? vp.width  : window.innerWidth;
+  canvas.height = vp ? vp.height : window.innerHeight;
 }
 resizeCanvas();
-window.addEventListener('resize', () => { resizeCanvas(); });
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', resizeCanvas);
+} else {
+  window.addEventListener('resize', resizeCanvas);
+}
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const overlay     = document.getElementById('overlay');
