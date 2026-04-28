@@ -2,37 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>kill the germzzz</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Boogaloo&family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <header>
-      <div class="logo">🦠 kill the germzzz</div>
-      <div class="hud">
-        <div class="hud-item">⭐ <span id="score">0</span></div>
-        <div class="hud-item">❤️ <span id="lives">3</span></div>
-      </div>
-    </header>
-    <main>
-      <canvas id="gameCanvas" width="900" height="600"></canvas>
-      <div class="overlay" id="overlay">
-        <div class="overlay-card">
-          <h1>kill the germzzz</h1>
-          <p>Slice the germs, dodge the Dettol!</p>
-          <button id="startButton">▶ Start Game</button>
-          <p class="hint">Swipe / click the germs. Don't miss — and watch out for bottles!</p>
-        </div>
-      </div>
-    </main>
+  <canvas id="gameCanvas"></canvas>
+
+  <header id="hud">
+    <div class="logo">🦠 germzzz</div>
+    <div class="team-name">🧼 Soap-er Heroes</div>
+    <div class="hud-right">
+      <div class="hud-item">⭐ <span id="score">0</span></div>
+      <div class="hud-item">❤️ <span id="lives">3</span></div>
+    </div>
+  </header>
+
+  <div id="progress-wrap">
+    <div id="progress-fill"></div>
+    <span id="progress-label">0 / 10</span>
   </div>
 
-  <!-- Hidden YouTube player -->
-  <div id="yt-player" style="position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;"></div>
-  <script src="https://www.youtube.com/iframe_api"></script>
+  <div class="overlay" id="overlay">
+    <div class="overlay-card">
+      <h1>kill the germzzz</h1>
+      <p>Slice <strong>10 germs</strong> to win — dodge the Dettol!</p>
+      <p class="mechanic-hint">💧 Slice a <strong>soap bubble</strong> to freeze all germs!</p>
+      <button id="startButton">▶ Start Game</button>
+      <p class="hint">Swipe or tap the germs. Don't let them escape!</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="winOverlay" style="display:none;">
+    <div class="overlay-card win-card">
+      <div class="trophy-anim">🏆</div>
+      <h1 class="win-h1">You Win!</h1>
+      <p>All germs eliminated!</p>
+      <p class="win-sub">Score: <strong id="winScore">0</strong> &nbsp;🧼 Hands clean!</p>
+      <button id="winPlayAgain">▶ Play Again</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="loseOverlay" style="display:none;">
+    <div class="overlay-card">
+      <h1>Game Over</h1>
+      <p>You scored <strong id="loseScore">0</strong> points.</p>
+      <button id="losePlayAgain">▶ Try Again</button>
+    </div>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>

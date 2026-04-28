@@ -1,551 +1,661 @@
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const startButton = document.getElementById('startButton');
-const overlay = document.getElementById('overlay');
-const scoreEl = document.getElementById('score');
-const livesEl = document.getElementById('lives');
+// ─── Canvas: fills full viewport ─────────────────────────────────────────────
+const canvas  = document.getElementById('gameCanvas');
+const ctx     = canvas.getContext('2d');
 
-// ─── YouTube Player ───────────────────────────────────────────────────────────
-let ytPlayer = null;
-let ytReady = false;
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', () => { resizeCanvas(); });
 
-window.onYouTubeIframeAPIReady = function () {
-  ytPlayer = new YT.Player('yt-player', {
-    videoId: 'DzYp5uqixz0',
-    playerVars: {
-      autoplay: 0,
-      loop: 1,
-      playlist: 'DzYp5uqixz0',
-      controls: 0,
-      disablekb: 1,
-    },
-    events: {
-      onReady: () => { ytReady = true; },
-    },
-  });
-};
+// ─── DOM refs ─────────────────────────────────────────────────────────────────
+const overlay     = document.getElementById('overlay');
+const winOverlay  = document.getElementById('winOverlay');
+const loseOverlay = document.getElementById('loseOverlay');
+const scoreEl     = document.getElementById('score');
+const livesEl     = document.getElementById('lives');
+const progressFill  = document.getElementById('progress-fill');
+const progressLabel = document.getElementById('progress-label');
 
-function playMusic() {
-  if (ytReady && ytPlayer && ytPlayer.playVideo) {
-    ytPlayer.setVolume(60);
-    ytPlayer.playVideo();
-  }
+const WIN_TARGET = 10;
+
+function updateProgress() {
+  const pct = Math.min(state.score / WIN_TARGET * 100, 100);
+  progressFill.style.width = pct + '%';
+  progressLabel.textContent = `${Math.min(state.score, WIN_TARGET)} / ${WIN_TARGET}`;
+}
+
+// ─── Chill ambient music ──────────────────────────────────────────────────────
+let musicCtx = null;
+
+function startMusic() {
+  if (musicCtx) { musicCtx.resume(); return; }
+  try {
+    musicCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const master = musicCtx.createGain();
+    master.gain.setValueAtTime(0, musicCtx.currentTime);
+    master.gain.linearRampToValueAtTime(0.16, musicCtx.currentTime + 3);
+    master.connect(musicCtx.destination);
+
+    // Reverb
+    const conv = musicCtx.createConvolver();
+    const len = musicCtx.sampleRate * 2.5;
+    const buf = musicCtx.createBuffer(2, len, musicCtx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.4);
+    }
+    conv.buffer = buf;
+    const revGain = musicCtx.createGain();
+    revGain.gain.value = 0.35;
+    conv.connect(revGain); revGain.connect(master);
+
+    // Pad chords (Cm pentatonic: C3 Eb3 G3 Bb3 C4)
+    [130.81, 155.56, 196.00, 233.08, 261.63].forEach((freq, i) => {
+      const osc = musicCtx.createOscillator();
+      const g   = musicCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.detune.value = (i % 2 === 0 ? 1 : -1) * 4;
+      g.gain.value = 0.055;
+      osc.connect(g); g.connect(master); g.connect(conv);
+      osc.start();
+    });
+
+    // Slow LFO vibrato
+    const lfo = musicCtx.createOscillator();
+    const lfoG = musicCtx.createGain();
+    lfo.frequency.value = 0.14; lfoG.gain.value = 3;
+    lfo.connect(lfoG); lfo.start();
+
+    // Bass drone C2
+    const bass = musicCtx.createOscillator();
+    const bassG = musicCtx.createGain();
+    bass.type = 'triangle'; bass.frequency.value = 65.41;
+    bassG.gain.value = 0.08;
+    bass.connect(bassG); bassG.connect(master); bass.start();
+
+    // Arp melody
+    const arpNotes = [261.63, 311.13, 392.00, 466.16, 523.25, 392.00, 311.13, 261.63];
+    let idx = 0;
+    function arp() {
+      if (!musicCtx) return;
+      const t = musicCtx.currentTime;
+      const o = musicCtx.createOscillator();
+      const e = musicCtx.createGain();
+      o.type = 'triangle';
+      o.frequency.value = arpNotes[idx++ % arpNotes.length];
+      e.gain.setValueAtTime(0, t);
+      e.gain.linearRampToValueAtTime(0.05, t + 0.04);
+      e.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      o.connect(e); e.connect(master); e.connect(conv);
+      o.start(t); o.stop(t + 0.6);
+    }
+    arp();
+    setInterval(arp, 620);
+  } catch(e) { console.warn('Audio error', e); }
 }
 
 function stopMusic() {
-  if (ytReady && ytPlayer && ytPlayer.pauseVideo) {
-    ytPlayer.pauseVideo();
-  }
+  if (musicCtx) musicCtx.suspend();
 }
 
-// ─── Background nebulae (static positions, animated via time) ────────────────
-const BG_ORBS = Array.from({ length: 8 }, (_, i) => ({ // Reduced from 14 to 8
-  x: Math.random(),
-  y: Math.random(),
-  r: 60 + Math.random() * 120,
-  hue: [160, 190, 280, 320, 140][i % 5],
+function playPop(freq) {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'triangle'; o.frequency.value = freq || 440;
+    g.gain.setValueAtTime(0.09, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.12);
+    o.connect(g).connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + 0.14);
+    setTimeout(() => ac.close(), 300);
+  } catch(e) {}
+}
+
+function playFreezeSound() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const master = ac.createGain(); master.gain.value = 0.12; master.connect(ac.destination);
+    [600, 800, 1000].forEach((f, i) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, ac.currentTime + i*0.06);
+      g.gain.linearRampToValueAtTime(0.08, ac.currentTime + i*0.06 + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i*0.06 + 0.4);
+      o.connect(g).connect(master);
+      o.start(ac.currentTime + i*0.06);
+      o.stop(ac.currentTime + i*0.06 + 0.45);
+    });
+    setTimeout(() => ac.close(), 800);
+  } catch(e) {}
+}
+
+// ─── Background decorations ───────────────────────────────────────────────────
+const BG_ORBS = Array.from({ length: 10 }, (_, i) => ({
+  x: Math.random(), y: Math.random(),
+  rFrac: 0.08 + Math.random() * 0.13,
+  hue: [160,190,280,320,140][i % 5],
   speed: 0.0003 + Math.random() * 0.0004,
   phase: Math.random() * Math.PI * 2,
 }));
 
-// Moving microbe-like blobs in background
-const BG_CELLS = Array.from({ length: 12 }, () => ({ // Reduced from 22 to 12
-  x: Math.random() * 900,
-  y: Math.random() * 600,
-  r: 8 + Math.random() * 18,
-  vx: (Math.random() - 0.5) * 0.15, // Slower movement
-  vy: (Math.random() - 0.5) * 0.15,
-  hue: [160, 190, 280, 120][Math.floor(Math.random() * 4)],
-  alpha: 0.04 + Math.random() * 0.07,
-  pulse: Math.random() * Math.PI * 2,
+const BG_CELLS = Array.from({ length: 14 }, () => ({
+  xFrac: Math.random(), yFrac: Math.random(),
+  rFrac: 0.007 + Math.random() * 0.016,
+  vxFrac: (Math.random()-0.5)*0.00014,
+  vyFrac: (Math.random()-0.5)*0.00014,
+  hue: [160,190,280,120][Math.floor(Math.random()*4)],
+  alpha: 0.05 + Math.random()*0.07,
+  pulse: Math.random()*Math.PI*2,
 }));
 
-// ─── Game State ───────────────────────────────────────────────────────────────
+// ─── Game state ───────────────────────────────────────────────────────────────
 const state = {
-  score: 0,
-  lives: 3,
+  score: 0, lives: 3,
   running: false,
-  entities: [],
-  trails: [],
-  particles: [],
-  shakeAmount: 0,
-  bottleHitFlash: 0,
-  lastSpawn: 0,
-  spawnInterval: 1000,
-  pointer: { x: 0, y: 0, active: false },
+  entities: [], trails: [], particles: [], confetti: [],
+  shakeAmount: 0, bottleHitFlash: 0,
+  lastSpawn: 0, spawnInterval: 1500,
+  lastBubbleSpawn: 0,          // soap bubble timer
+  frozenTimer: 0,              // >0 = all germs frozen
+  freezeFlash: 0,              // brief cyan screen flash on freeze
+  freezeLabel: 0,              // show "❄ FREEZE!" label
+  pointer: { active: false },
   time: 0,
 };
 
 const germColors = ['#39ff6e','#00f5ff','#ff2d78','#b44fff','#f7ff00','#ff8c00','#40e0ff','#7fff00'];
-const dettolColor = '#9fd2b7';
-const chocolateColor = '#6b4c3a';
+const CONFETTI_COLS = ['#ff2d78','#39ff6e','#00f5ff','#f7ff00','#b44fff','#ff8c00','#ffffff'];
 
-function rand(min, max) { return Math.random() * (max - min) + min; }
+function rand(a, b) { return Math.random()*(b-a)+a; }
+function W() { return canvas.width; }
+function H() { return canvas.height; }
 
-// ─── Particles ────────────────────────────────────────────────────────────────
-function createParticles(x, y, type, color) {
-  // Limit total particles to prevent performance issues - reduced from 80 to 50
-  if (state.particles.length > 50) return;
-  
-  const count = type === 'germ' ? 4 : 2; // Further reduced from 6/3 to 4/2
-  for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i) / count + rand(-0.4, 0.4);
-    const speed = type === 'germ' ? rand(1.5, 3) : rand(1, 2.5); // Even slower particles
-    state.particles.push({
-      x, y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      radius: rand(1.5, 4), // Even smaller particles
-      alpha: 1,
-      color: type === 'germ' ? color : '#ff6b6b',
-      life: 0.4, // Even shorter life - reduced from 0.5 to 0.4
-      maxLife: 0.4,
+// ─── Entity creation ──────────────────────────────────────────────────────────
+function createEntity() {
+  const choc   = Math.random() < 0.01;
+  const dettol = !choc && Math.random() < 0.22;
+  const baseR  = Math.min(W(), H()) * 0.038;
+  const radius = dettol ? baseR*1.1 : choc ? baseR*0.85 : baseR * rand(0.75, 1.25);
+  const x = rand(radius, W()-radius);
+  const ss = Math.min(W(), H()) / 600; // speed scale
+
+  // ↑ Speed increased ~15% from previous build
+  const vy = rand(-7.0, -9.0) * ss;
+
+  let type = 'germ', color = germColors[Math.floor(rand(0, germColors.length))];
+  if (dettol)      { type = 'dettol';    color = '#9fd2b7'; }
+  else if (choc)   { type = 'chocolate'; color = '#6b4c3a'; }
+
+  return { x, y: H()+radius, vx: rand(-1,1)*ss, vy, radius, type, color,
+           rotation: rand(0, Math.PI*2), angularVelocity: rand(-0.04,0.04),
+           sliced: false, glowPhase: Math.random()*Math.PI*2,
+           frozenVx: 0, frozenVy: 0 };
+}
+
+// ─── Soap bubble ──────────────────────────────────────────────────────────────
+function createBubble() {
+  const ss = Math.min(W(),H())/600;
+  const radius = Math.min(W(),H()) * 0.048;
+  const x = rand(radius, W()-radius);
+  return {
+    x, y: H()+radius,
+    vx: rand(-0.4, 0.4)*ss,
+    vy: rand(-4.5, -6.0)*ss,   // floats up gently
+    radius, type: 'bubble',
+    rotation: 0, angularVelocity: 0.008,
+    sliced: false, glowPhase: Math.random()*Math.PI*2,
+    hueShift: 0,
+  };
+}
+
+// ─── Particles / confetti ─────────────────────────────────────────────────────
+function createParticles(x, y, color) {
+  for (let i = 0; i < 8; i++) {
+    const a = (Math.PI*2*i)/8 + rand(-0.3,0.3);
+    const spd = rand(3,7);
+    state.particles.push({ x, y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd,
+      r: rand(3,8), alpha:1, color, life:0.7, maxLife:0.7 });
+  }
+}
+
+function createFreezeParticles() {
+  for (let i = 0; i < 30; i++) {
+    const x = rand(0, W()), y = rand(0, H());
+    const a = rand(0, Math.PI*2), spd = rand(2,5);
+    state.particles.push({ x, y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd,
+      r: rand(4,9), alpha:1, color: '#a0eeff', life:0.9, maxLife:0.9 });
+  }
+}
+
+function spawnConfetti() {
+  for (let i = 0; i < 120; i++) {
+    state.confetti.push({
+      x: rand(0,W()), y: rand(-H()*0.3, 0),
+      vx: rand(-2,2), vy: rand(2,7),
+      r: rand(4,9), rot: rand(0,Math.PI*2), rotV: rand(-0.15,0.15),
+      color: CONFETTI_COLS[Math.floor(rand(0,CONFETTI_COLS.length))],
+      alpha:1, life:1, maxLife:1,
+      shape: Math.random()>0.5?'rect':'circle',
     });
   }
 }
 
-// ─── Entity creation ──────────────────────────────────────────────────────────
-function createEntity() {
-  const chocolateChance = Math.random() < 0.005; // Reduced from 0.01 to 0.005 (0.5%)
-  const isDettol = !chocolateChance && Math.random() < 0.24;
-  const radius = isDettol ? rand(24, 34) : chocolateChance ? rand(18, 26) : rand(20, 32);
-  const x = rand(radius, canvas.width - radius);
-  let type = 'germ', color = germColors[Math.floor(rand(0, germColors.length))];
-  if (isDettol) { type = 'dettol'; color = dettolColor; }
-  else if (chocolateChance) { type = 'chocolate'; color = chocolateColor; }
-
-  return {
-    x, y: canvas.height + radius,
-    vx: rand(-0.9, 0.9),
-    vy: rand(-12.5, -15.5), // Increased speed: was -11.5 to -14.0
-    radius, type,
-    rotation: rand(0, Math.PI * 2),
-    angularVelocity: rand(-0.04, 0.04),
-    color, sliced: false,
-    glowPhase: Math.random() * Math.PI * 2,
-  };
-}
-
-// ─── Pop sound ────────────────────────────────────────────────────────────────
-function playPop(freq = 460) {
-  try {
-    const pop = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = pop.createOscillator();
-    const gain = pop.createGain();
-    osc.type = 'triangle';
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.08, pop.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, pop.currentTime + 0.1);
-    osc.connect(gain).connect(pop.destination);
-    osc.start();
-    osc.stop(pop.currentTime + 0.12);
-    setTimeout(() => pop.close(), 200);
-  } catch (e) {}
-}
-
-// ─── Game logic ───────────────────────────────────────────────────────────────
+// ─── Game flow ────────────────────────────────────────────────────────────────
 function startGame() {
   state.score = 0; state.lives = 3;
-  state.entities = []; state.trails = []; state.particles = [];
+  state.entities = []; state.trails = []; state.particles = []; state.confetti = [];
   state.shakeAmount = 0; state.bottleHitFlash = 0;
   state.lastSpawn = 0; state.spawnInterval = 1500;
+  state.lastBubbleSpawn = 0;
+  state.frozenTimer = 0; state.freezeFlash = 0; state.freezeLabel = 0;
   state.running = true; state.time = 0;
-  overlay.style.display = 'none';
-  scoreEl.textContent = 0;
-  livesEl.textContent = 3;
-  playMusic();
+  overlay.style.display     = 'none';
+  winOverlay.style.display  = 'none';
+  loseOverlay.style.display = 'none';
+  scoreEl.textContent = 0; livesEl.textContent = 3;
+  updateProgress();
+  startMusic();
+  lastTime = 0;
   requestAnimationFrame(loop);
 }
 
-function endGame() {
+function triggerWin() {
   state.running = false;
   stopMusic();
-  overlay.style.display = 'grid';
-  overlay.querySelector('h1').textContent = 'Game Over';
-  overlay.querySelector('p').textContent = `You scored ${state.score} points!`;
-  startButton.textContent = '▶ Play Again';
+  spawnConfetti();
+  document.getElementById('winScore').textContent = state.score;
+  setTimeout(() => { winOverlay.style.display = 'grid'; }, 1600);
+  lastTime = 0;
+  requestAnimationFrame(celebLoop);
 }
 
-function winGame() {
+function triggerLose() {
   state.running = false;
   stopMusic();
-  overlay.style.display = 'grid';
-  overlay.querySelector('h1').textContent = '🎉 You Win!';
-  overlay.querySelector('p').textContent = `You reached ${state.score} points!`;
-  startButton.textContent = '▶ Play Again';
-  
-  // Celebration confetti
-  for (let i = 0; i < 50; i++) {
-    state.particles.push({
-      x: Math.random() * canvas.width,
-      y: canvas.height + 10,
-      vx: (Math.random() - 0.5) * 8,
-      vy: -(Math.random() * 6 + 4),
-      radius: Math.random() * 6 + 2,
-      alpha: 1,
-      color: ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b'][Math.floor(Math.random() * 6)],
-      type: 'confetti',
-      life: 3,
-      maxLife: 3,
+  document.getElementById('loseScore').textContent = state.score;
+  loseOverlay.style.display = 'grid';
+}
+
+// ─── Slice logic ──────────────────────────────────────────────────────────────
+function sliceEntity(e) {
+  e.sliced = true;
+
+  if (e.type === 'bubble') {
+    // FREEZE all remaining germs for 2.5 s
+    state.frozenTimer = 2500;
+    state.freezeFlash = 1.0;
+    state.freezeLabel = 2500;
+    // store current velocity so we can restore feel after freeze
+    state.entities.forEach(en => {
+      if (!en.sliced) { en.frozenVx = en.vx; en.frozenVy = en.vy; }
     });
+    createFreezeParticles();
+    playFreezeSound();
+    return;
+  }
+
+  if (e.type === 'germ') {
+    state.score++;
+    createParticles(e.x, e.y, e.color);
+    playPop(380 + Math.random()*220);
+    scoreEl.textContent = state.score;
+    updateProgress();
+    if (state.score >= WIN_TARGET) { triggerWin(); return; }
+
+  } else if (e.type === 'chocolate') {
+    state.score += 5; state.lives = Math.min(state.lives+1, 5);
+    createParticles(e.x, e.y, '#d4a574');
+    playPop(600);
+    scoreEl.textContent = state.score; livesEl.textContent = state.lives;
+    updateProgress();
+    if (state.score >= WIN_TARGET) { triggerWin(); return; }
+
+  } else { // dettol
+    state.lives--;
+    state.shakeAmount = 10; state.bottleHitFlash = 0.8;
+    createParticles(e.x, e.y, '#ff2d78');
+    livesEl.textContent = state.lives;
+    if (state.lives <= 0) { triggerLose(); return; }
   }
 }
 
 function addTrail(x, y) {
-  state.trails.push({ x, y, alpha: 0.9, radius: 16 });
-  if (state.trails.length > 16) state.trails.shift(); // Reduced from 24 to 16
-}
-
-function sliceEntity(entity) {
-  entity.sliced = true;
-  if (entity.type === 'germ') {
-    state.score += 1;
-    createParticles(entity.x, entity.y, 'germ', entity.color);
-    playPop(400 + Math.random() * 200);
-  } else if (entity.type === 'chocolate') {
-    state.score += 5;
-    state.lives += 1;
-    createParticles(entity.x, entity.y, 'chocolate', '#d4a574');
-    playPop(600);
-  } else {
-    state.lives -= 1;
-    state.shakeAmount = 10;
-    state.bottleHitFlash = 0.7;
-    createParticles(entity.x, entity.y, 'bottle', '#ff2d78');
-    if (state.lives <= 0) { endGame(); return; }
-  }
-  scoreEl.textContent = state.score;
-  livesEl.textContent = state.lives;
-  
-  if (state.score >= 15) {
-    winGame();
-  }
+  state.trails.push({ x, y, alpha: 0.85, radius: Math.min(W(),H())*0.025 });
+  if (state.trails.length > 22) state.trails.shift();
 }
 
 function handleInteraction(x, y) {
+  if (!state.running) return;
   addTrail(x, y);
   state.entities.forEach(e => {
     if (e.sliced) return;
-    if (Math.hypot(e.x - x, e.y - y) < e.radius + 18) sliceEntity(e);
+    if (Math.hypot(e.x-x, e.y-y) < e.radius+20) sliceEntity(e);
   });
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
-function update(delta) {
-  if (!state.running) return;
-  state.time += delta * 0.001;
+function update(dt) {
+  state.time += dt * 0.001;
 
-  // Update background cells
+  // Background cells drift
   BG_CELLS.forEach(c => {
-    c.x += c.vx;
-    c.y += c.vy;
-    c.pulse += 0.02;
-    if (c.x < -50) c.x = canvas.width + 50;
-    if (c.x > canvas.width + 50) c.x = -50;
-    if (c.y < -50) c.y = canvas.height + 50;
-    if (c.y > canvas.height + 50) c.y = -50;
+    c.xFrac += c.vxFrac; c.yFrac += c.vyFrac; c.pulse += 0.018;
+    if (c.xFrac < 0) c.xFrac = 1; if (c.xFrac > 1) c.xFrac = 0;
+    if (c.yFrac < 0) c.yFrac = 1; if (c.yFrac > 1) c.yFrac = 0;
   });
 
-  state.lastSpawn += delta;
+  // Tick freeze timer
+  if (state.frozenTimer > 0) {
+    state.frozenTimer  = Math.max(0, state.frozenTimer  - dt);
+    state.freezeLabel  = Math.max(0, state.freezeLabel  - dt);
+    state.freezeFlash  = Math.max(0, state.freezeFlash  - dt*1.8);
+  }
+
+  const frozen = state.frozenTimer > 0;
+
+  // Spawn germs
+  state.lastSpawn += dt;
   if (state.lastSpawn > state.spawnInterval) {
     state.entities.push(createEntity());
     state.lastSpawn = 0;
-    state.spawnInterval = Math.max(700, state.spawnInterval - 4);
+    state.spawnInterval = Math.max(650, state.spawnInterval - 4);
   }
 
+  // Spawn soap bubble every ~7 s
+  state.lastBubbleSpawn += dt;
+  if (state.lastBubbleSpawn > 7000) {
+    state.entities.push(createBubble());
+    state.lastBubbleSpawn = 0;
+  }
+
+  const g = 0.07 * (H()/600);
+
   state.entities.forEach(e => {
-    e.vy += 0.18;
-    e.x += e.vx;
-    e.y += e.vy;
-    e.rotation += e.angularVelocity;
     e.glowPhase += 0.05;
-    if (e.x < e.radius || e.x > canvas.width - e.radius) e.vx *= -0.9;
+    if (e.type === 'bubble') {
+      e.hueShift = (e.hueShift + 1.5) % 360;
+      if (!frozen) {
+        // Bubbles still float up even during freeze (more dramatic)
+        e.vy += g * 0.25; // very weak gravity — floats
+        e.x  += e.vx;
+        e.y  += e.vy;
+        e.rotation += e.angularVelocity;
+        if (e.x < e.radius || e.x > W()-e.radius) e.vx *= -0.9;
+      }
+      return;
+    }
+
+    if (frozen) return; // germs/dettol are paused
+
+    e.vy += g;
+    e.x  += e.vx;
+    e.y  += e.vy;
+    e.rotation += e.angularVelocity;
+    if (e.x < e.radius || e.x > W()-e.radius) e.vx *= -0.9;
   });
 
+  // Filter out-of-bounds / sliced
   state.entities = state.entities.filter(e => {
     if (e.sliced) return false;
-    if (e.y - e.radius > canvas.height) {
+    if (e.y - e.radius > H()) {
       if (e.type === 'germ') {
-        state.lives -= 1;
+        state.lives--;
         livesEl.textContent = state.lives;
-        if (state.lives <= 0) endGame();
+        if (state.lives <= 0) triggerLose();
       }
       return false;
     }
     return true;
   });
 
-  state.trails.forEach(t => { t.alpha -= 0.04; t.radius += 0.5; });
+  // Trails
+  state.trails.forEach(t => { t.alpha -= 0.04; t.radius += 0.4; });
   state.trails = state.trails.filter(t => t.alpha > 0);
 
-  state.particles.forEach(p => {
-    p.vy += 0.15; p.x += p.vx; p.y += p.vy;
-    p.life -= 0.025; // Faster fade for better performance
-    p.alpha = Math.max(0, p.life / p.maxLife);
-  });
+  // Particles
+  state.particles.forEach(p => { p.vy+=0.15; p.x+=p.vx; p.y+=p.vy; p.life-=0.02; p.alpha=Math.max(0,p.life/p.maxLife); });
   state.particles = state.particles.filter(p => p.life > 0);
 
-  state.shakeAmount *= 0.9;
-  state.bottleHitFlash = Math.max(0, state.bottleHitFlash - 0.04);
+  state.shakeAmount    *= 0.88;
+  state.bottleHitFlash  = Math.max(0, state.bottleHitFlash - 0.04);
+}
+
+function updateConfetti(dt) {
+  state.confetti.forEach(c => { c.x+=c.vx; c.vy+=0.12; c.y+=c.vy; c.rot+=c.rotV; c.life-=0.005; c.alpha=Math.max(0,c.life/c.maxLife); });
+  state.confetti = state.confetti.filter(c => c.life>0 && c.y<H()*1.2);
 }
 
 // ─── Draw ─────────────────────────────────────────────────────────────────────
 function draw() {
-  const sx = (Math.random() - 0.5) * state.shakeAmount;
-  const sy = (Math.random() - 0.5) * state.shakeAmount;
+  const frozen = state.frozenTimer > 0;
+  const sx = (Math.random()-0.5)*state.shakeAmount;
+  const sy = (Math.random()-0.5)*state.shakeAmount;
   ctx.save();
   ctx.translate(sx, sy);
-  ctx.clearRect(-sx, -sy, canvas.width, canvas.height);
+  ctx.clearRect(-sx, -sy, W(), H());
 
-  // ── Deep space base ──
+  // Deep space base
   ctx.fillStyle = '#050d1a';
-  ctx.fillRect(-sx, -sy, canvas.width, canvas.height);
+  ctx.fillRect(-sx, -sy, W(), H());
 
-  // ── Animated radial nebulae ──
-  BG_ORBS.forEach(orb => {
-    const pulse = Math.sin(state.time * orb.speed * 6283 + orb.phase) * 0.3 + 0.7;
-    const grd = ctx.createRadialGradient(
-      orb.x * canvas.width, orb.y * canvas.height, 0,
-      orb.x * canvas.width, orb.y * canvas.height, orb.r * pulse
-    );
-    grd.addColorStop(0, `hsla(${orb.hue}, 100%, 60%, 0.12)`);
-    grd.addColorStop(1, `hsla(${orb.hue}, 100%, 40%, 0)`);
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.arc(orb.x * canvas.width, orb.y * canvas.height, orb.r * pulse, 0, Math.PI * 2);
-    ctx.fill();
+  // Nebula orbs
+  BG_ORBS.forEach(o => {
+    const pulse = Math.sin(state.time*o.speed*6283+o.phase)*0.3+0.7;
+    const r = Math.min(W(),H())*o.rFrac*pulse;
+    const grd = ctx.createRadialGradient(o.x*W(),o.y*H(),0,o.x*W(),o.y*H(),r);
+    grd.addColorStop(0, `hsla(${o.hue},100%,60%,0.11)`);
+    grd.addColorStop(1, `hsla(${o.hue},100%,40%,0)`);
+    ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(o.x*W(),o.y*H(),r,0,Math.PI*2); ctx.fill();
   });
 
-  // ── Floating microbe blobs (background) ──
+  // Floating microbes
   BG_CELLS.forEach(c => {
-    const pr = c.r * (1 + 0.15 * Math.sin(c.pulse));
-    const grd = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, pr);
-    grd.addColorStop(0, `hsla(${c.hue}, 100%, 65%, ${c.alpha * 1.5})`);
-    grd.addColorStop(1, `hsla(${c.hue}, 100%, 50%, 0)`);
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.arc(c.x, c.y, pr, 0, Math.PI * 2);
-    ctx.fill();
+    const x=c.xFrac*W(), y=c.yFrac*H();
+    const r=Math.min(W(),H())*c.rFrac*(1+0.15*Math.sin(c.pulse));
+    const grd=ctx.createRadialGradient(x,y,0,x,y,r);
+    grd.addColorStop(0, `hsla(${c.hue},100%,65%,${c.alpha*1.4})`);
+    grd.addColorStop(1, `hsla(${c.hue},100%,50%,0)`);
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
   });
 
-  // ── Grid lines (petri dish feel) ──
-  ctx.strokeStyle = 'rgba(0,245,255,0.04)';
-  ctx.lineWidth = 1;
-  for (let x = 0; x < canvas.width; x += 90) { // Reduced from 60 to 90
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-  }
-  for (let y = 0; y < canvas.height; y += 90) { // Reduced from 60 to 90
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-  }
+  // Grid
+  ctx.strokeStyle='rgba(0,245,255,0.035)'; ctx.lineWidth=1;
+  const gs=Math.min(W(),H())*0.1;
+  for (let x=-sx; x<W(); x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H());ctx.stroke();}
+  for (let y=-sy; y<H(); y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W(),y);ctx.stroke();}
 
-  // ── Danger tint when low lives ──
-  if (state.lives <= 2) {
-    ctx.fillStyle = `rgba(255, 45, 120, ${0.12 * (3 - state.lives)})`;
-    ctx.fillRect(-sx, -sy, canvas.width, canvas.height);
+  // Danger tint
+  if (state.lives<=2) { ctx.fillStyle=`rgba(255,45,120,${0.1*(3-state.lives)})`; ctx.fillRect(-sx,-sy,W(),H()); }
+
+  // Freeze tint + freeze label
+  if (frozen) {
+    ctx.fillStyle = `rgba(0,200,255,${0.12 + 0.08*Math.sin(state.time*8)})`;
+    ctx.fillRect(-sx,-sy,W(),H());
   }
-
-  // ── Slice trails ──
-  state.trails.forEach(t => {
-    const grd = ctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, t.radius);
-    grd.addColorStop(0, `rgba(0,245,255,${t.alpha * 0.8})`);
-    grd.addColorStop(1, `rgba(57,255,110,0)`);
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  // ── Entities ──
-  state.entities.forEach(entity => {
+  if (state.freezeFlash>0) {
+    ctx.fillStyle = `rgba(150,240,255,${0.35*state.freezeFlash})`;
+    ctx.fillRect(-sx,-sy,W(),H());
+  }
+  if (state.freezeLabel > 0) {
+    const alpha = Math.min(1, state.freezeLabel/400);
     ctx.save();
-    ctx.translate(entity.x, entity.y);
-    ctx.rotate(entity.rotation);
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${Math.min(W(),H())*0.072}px Boogaloo, cursive`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#a0eeff';
+    ctx.shadowColor = '#00f5ff'; ctx.shadowBlur = 20;
+    ctx.fillText('❄ FREEZE!', W()/2, H()/2 - Math.min(W(),H())*0.06);
+    ctx.restore();
+  }
 
-    const glow = 6 + 4 * Math.sin(entity.glowPhase);
+  // Trails
+  state.trails.forEach(t => {
+    const grd=ctx.createRadialGradient(t.x,t.y,0,t.x,t.y,t.radius);
+    grd.addColorStop(0,`rgba(0,245,255,${t.alpha*0.75})`);
+    grd.addColorStop(1,'rgba(57,255,110,0)');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(t.x,t.y,t.radius,0,Math.PI*2); ctx.fill();
+  });
 
-    if (entity.type === 'dettol') {
-      const bh = entity.radius * 1.5, bw = entity.radius * 0.95;
-      // Glow halo
-      ctx.shadowColor = 'rgba(255,45,120,0.7)';
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = entity.color;
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.roundRect(-bw/2, -bh/2, bw, bh, entity.radius * 0.18);
-      ctx.fill(); ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#f8fbfc';
-      ctx.fillRect(-bw/2+3, -bh/2+4, bw-6, bh*0.3);
-      ctx.fillStyle = '#2a524a';
-      ctx.font = `bold ${Math.max(10, entity.radius * 0.35)}px Nunito`;
-      ctx.textAlign = 'center';
-      ctx.fillText('Dettol', 0, -bh*0.04);
-      ctx.fillStyle = '#ddeee8';
-      ctx.fillRect(-bw/6, bh*0.2, bw/3, bh*0.14);
+  // Entities
+  state.entities.forEach(e => {
+    ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.rotation);
+    const glow = 6+4*Math.sin(e.glowPhase);
 
-    } else if (entity.type === 'chocolate') {
-      const bw = entity.radius * 1.4, bh = entity.radius * 0.9;
-      ctx.shadowColor = 'rgba(255,180,80,0.5)';
-      ctx.shadowBlur = 14;
-      ctx.fillStyle = entity.color;
-      ctx.fillRect(-bw/2, -bh/2, bw, bh);
-      ctx.strokeStyle = '#3a200f';
+    // Frozen shimmer on germs/dettol
+    if (frozen && e.type !== 'bubble') {
+      ctx.shadowColor = '#a0eeff'; ctx.shadowBlur = 14;
+    }
+
+    if (e.type === 'bubble') {
+      // Iridescent soap bubble
+      const r = e.radius;
+      const hue = e.hueShift;
+      ctx.shadowColor = `hsla(${hue},100%,70%,0.8)`; ctx.shadowBlur = 18;
+      const grd = ctx.createRadialGradient(-r*0.3,-r*0.3,r*0.05,-r*0.3,-r*0.3,r*1.4);
+      grd.addColorStop(0,   `hsla(${hue},   100%,95%,0.55)`);
+      grd.addColorStop(0.3, `hsla(${(hue+60)%360},100%,75%,0.18)`);
+      grd.addColorStop(0.7, `hsla(${(hue+150)%360},100%,70%,0.12)`);
+      grd.addColorStop(1,   `hsla(${(hue+240)%360},100%,80%,0.04)`);
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+      // Rim highlight
+      ctx.strokeStyle = `hsla(${(hue+30)%360},100%,90%,0.55)`;
       ctx.lineWidth = 2;
-      ctx.strokeRect(-bw/2, -bh/2, bw, bh);
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke();
+      // Glare dot
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.beginPath(); ctx.arc(-r*0.3,-r*0.32,r*0.16,0,Math.PI*2); ctx.fill();
+      // Small ❄ inside
       ctx.shadowBlur = 0;
-      for (let r = 0; r < 3; r++) {
-        for (let c = 0; c < 4; c++) {
-          const px = -bw/2 + (bw/4)*c + bw/8;
-          const py = -bh/2 + (bh/3)*r + bh/6;
-          ctx.fillStyle = '#8b6a47';
-          ctx.fillRect(px - bw/12, py - bh/10, bw/6, bh/5);
-        }
+      ctx.font = `${r*0.7}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('💧', 0, r*0.06);
+
+    } else if (e.type === 'dettol') {
+      const bh=e.radius*1.5, bw=e.radius*0.95;
+      if (!frozen) { ctx.shadowColor='rgba(255,45,120,0.7)'; ctx.shadowBlur=18; }
+      ctx.fillStyle=e.color; ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.roundRect(-bw/2,-bh/2,bw,bh,e.radius*0.18); ctx.fill(); ctx.stroke();
+      ctx.shadowBlur=0;
+      ctx.fillStyle='#f8fbfc'; ctx.fillRect(-bw/2+3,-bh/2+4,bw-6,bh*0.3);
+      ctx.fillStyle='#2a524a'; ctx.font=`bold ${Math.max(8,e.radius*0.32)}px Nunito`;
+      ctx.textAlign='center'; ctx.fillText('Dettol',0,-bh*0.04);
+      ctx.fillStyle='#ddeee8'; ctx.fillRect(-bw/6,bh*0.2,bw/3,bh*0.14);
+
+    } else if (e.type === 'chocolate') {
+      const bw=e.radius*1.4, bh=e.radius*0.9;
+      if (!frozen) { ctx.shadowColor='rgba(255,180,80,0.4)'; ctx.shadowBlur=12; }
+      ctx.fillStyle=e.color; ctx.fillRect(-bw/2,-bh/2,bw,bh);
+      ctx.strokeStyle='#3a200f'; ctx.lineWidth=2; ctx.strokeRect(-bw/2,-bh/2,bw,bh);
+      ctx.shadowBlur=0;
+      for(let rr=0;rr<3;rr++) for(let cc=0;cc<4;cc++){
+        const px=-bw/2+(bw/4)*cc+bw/8, py=-bh/2+(bh/3)*rr+bh/6;
+        ctx.fillStyle='#8b6a47'; ctx.fillRect(px-bw/12,py-bh/10,bw/6,bh/5);
       }
 
     } else {
-      // Germ – glowing neon circle with spikes
-      ctx.shadowColor = entity.color;
-      ctx.shadowBlur = glow + 8;
-      ctx.fillStyle = entity.color;
-      ctx.beginPath();
-      ctx.arc(0, 0, entity.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-
-      // Spiky protrusions
-      for (let i = 0; i < 12; i++) {
-        const angle = (Math.PI * 2 * i) / 12;
-        const pr = entity.radius + 9 + 3 * Math.sin(entity.glowPhase + i);
-        const px = Math.cos(angle) * pr;
-        const py = Math.sin(angle) * pr;
-        ctx.fillStyle = entity.color;
-        ctx.globalAlpha = 0.85;
-        ctx.beginPath();
-        ctx.arc(px, py, entity.radius * 0.28, 0, Math.PI * 2);
-        ctx.fill();
+      // Germ
+      if (!frozen) { ctx.shadowColor=e.color; ctx.shadowBlur=glow+8; }
+      ctx.fillStyle = frozen ? `hsl(200,80%,${parseInt(e.color.replace('#',''),16)%50+50}%)` : e.color;
+      ctx.beginPath(); ctx.arc(0,0,e.radius,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur=0;
+      for(let i=0;i<12;i++){
+        const a=(Math.PI*2*i)/12;
+        const pr=e.radius+8+3*Math.sin(e.glowPhase+i);
+        ctx.fillStyle= frozen ? 'rgba(160,220,255,0.5)' : e.color;
+        ctx.globalAlpha=0.8;
+        ctx.beginPath(); ctx.arc(Math.cos(a)*pr,Math.sin(a)*pr,e.radius*0.27,0,Math.PI*2); ctx.fill();
       }
-      ctx.globalAlpha = 1;
-
-      // Eyes
-      const ed = entity.radius * 0.35, es = entity.radius * 0.24;
-      ctx.fillStyle = '#001a06';
-      ctx.beginPath(); ctx.arc(-ed, -entity.radius*0.2, es, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(ed, -entity.radius*0.2, es, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(-ed-es*0.3, -entity.radius*0.26, es*0.38, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(ed-es*0.3, -entity.radius*0.26, es*0.38, 0, Math.PI*2); ctx.fill();
-
-      // Mouth
-      ctx.fillStyle = '#c0003a';
+      ctx.globalAlpha=1;
+      const ed=e.radius*0.35, es=e.radius*0.24;
+      ctx.fillStyle='#001a06';
+      ctx.beginPath(); ctx.arc(-ed,-e.radius*0.2,es,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(ed,-e.radius*0.2,es,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(-ed-es*0.3,-e.radius*0.26,es*0.38,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(ed-es*0.3,-e.radius*0.26,es*0.38,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#c0003a';
       ctx.beginPath();
-      ctx.moveTo(-entity.radius*0.38, entity.radius*0.15);
-      ctx.lineTo(entity.radius*0.38, entity.radius*0.15);
-      ctx.lineTo(entity.radius*0.32, entity.radius*0.35);
-      ctx.lineTo(entity.radius*0.14, entity.radius*0.35);
-      ctx.lineTo(0, entity.radius*0.27);
-      ctx.lineTo(-entity.radius*0.14, entity.radius*0.35);
-      ctx.lineTo(-entity.radius*0.32, entity.radius*0.35);
-      ctx.closePath();
-      ctx.fill();
+      ctx.moveTo(-e.radius*0.38,e.radius*0.15); ctx.lineTo(e.radius*0.38,e.radius*0.15);
+      ctx.lineTo(e.radius*0.32,e.radius*0.35); ctx.lineTo(e.radius*0.14,e.radius*0.35);
+      ctx.lineTo(0,e.radius*0.27); ctx.lineTo(-e.radius*0.14,e.radius*0.35);
+      ctx.lineTo(-e.radius*0.32,e.radius*0.35); ctx.closePath(); ctx.fill();
     }
-
     ctx.restore();
   });
 
-  // ── Particles ──
-  state.particles.forEach(p => {
-    ctx.save();
-    ctx.globalAlpha = p.alpha;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 4; // Reduced from 8 to 4
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-    ctx.fill();
+  // Particles
+  state.particles.forEach(p=>{
+    ctx.save(); ctx.globalAlpha=p.alpha;
+    ctx.shadowColor=p.color; ctx.shadowBlur=6;
+    ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
     ctx.restore();
   });
 
-  // ── Hit flash ──
-  if (state.bottleHitFlash > 0) {
-    ctx.fillStyle = `rgba(255, 45, 120, ${0.35 * state.bottleHitFlash})`;
-    ctx.fillRect(-sx, -sy, canvas.width, canvas.height);
+  // Confetti
+  state.confetti.forEach(c=>{
+    ctx.save(); ctx.globalAlpha=c.alpha;
+    ctx.translate(c.x,c.y); ctx.rotate(c.rot);
+    ctx.fillStyle=c.color;
+    if(c.shape==='rect') ctx.fillRect(-c.r/2,-c.r*0.4,c.r,c.r*0.8);
+    else { ctx.beginPath(); ctx.arc(0,0,c.r/2,0,Math.PI*2); ctx.fill(); }
+    ctx.restore();
+  });
+
+  // Bottle hit flash
+  if(state.bottleHitFlash>0){
+    ctx.fillStyle=`rgba(255,45,120,${0.3*state.bottleHitFlash})`;
+    ctx.fillRect(-sx,-sy,W(),H());
   }
 
   ctx.restore();
 }
 
-// ─── Loop ─────────────────────────────────────────────────────────────────────
+// ─── Loops ────────────────────────────────────────────────────────────────────
 let lastTime = 0;
-function loop(timestamp) {
+function loop(ts) {
   if (!state.running) return;
-  const delta = Math.min(timestamp - lastTime, 33); // Cap at ~30fps minimum (33ms)
-  lastTime = timestamp;
-  update(delta);
+  const dt = Math.min(ts-(lastTime||ts), 33);
+  lastTime = ts;
+  update(dt);
   draw();
   requestAnimationFrame(loop);
 }
 
+function celebLoop(ts) {
+  const dt = Math.min(ts-(lastTime||ts), 33);
+  lastTime = ts;
+  updateConfetti(dt);
+  draw();
+  if (state.confetti.length > 0) requestAnimationFrame(celebLoop);
+}
+
 // ─── Input ────────────────────────────────────────────────────────────────────
-function getCanvasCoords(e) {
-  const rect = canvas.getBoundingClientRect();
-  const clientX = e.clientX || e.pageX || 0;
-  const clientY = e.clientY || e.pageY || 0;
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  return {
-    x: (clientX - rect.left) * scaleX,
-    y: (clientY - rect.top) * scaleY
-  };
+function getCoords(e) {
+  const r = canvas.getBoundingClientRect();
+  const src = e.touches ? e.touches[0] : e;
+  // Scale from display coords to canvas coords
+  const scaleX = canvas.width  / r.width;
+  const scaleY = canvas.height / r.height;
+  return { x: (src.clientX-r.left)*scaleX, y: (src.clientY-r.top)*scaleY };
 }
 
-// Prevent browser navigation and scrolling
-document.addEventListener('touchstart', e => {
-  if (e.target === canvas || canvas.contains(e.target)) {
-    e.preventDefault();
-  }
-}, { passive: false });
-
-document.addEventListener('touchmove', e => {
-  if (e.target === canvas || canvas.contains(e.target)) {
-    e.preventDefault();
-  }
-}, { passive: false });
-
-document.addEventListener('touchend', e => {
-  if (e.target === canvas || canvas.contains(e.target)) {
-    e.preventDefault();
-  }
-}, { passive: false });
-
-// Unified touch/pointer handling
-function handlePointerDown(e) {
-  e.preventDefault();
+canvas.addEventListener('pointerdown', e => {
   state.pointer.active = true;
-  const coords = getCanvasCoords(e.touches ? e.touches[0] : e);
-  handleInteraction(coords.x, coords.y);
-}
+  const c = getCoords(e); handleInteraction(c.x, c.y);
+}, { passive: true });
 
-function handlePointerMove(e) {
-  e.preventDefault();
+canvas.addEventListener('pointermove', e => {
   if (!state.pointer.active) return;
-  const coords = getCanvasCoords(e.touches ? e.touches[0] : e);
-  handleInteraction(coords.x, coords.y);
-}
+  const c = getCoords(e); handleInteraction(c.x, c.y);
+}, { passive: true });
 
-function handlePointerUp(e) {
-  e.preventDefault();
-  state.pointer.active = false;
-}
+canvas.addEventListener('pointerup', () => { state.pointer.active = false; });
 
-// Pointer events (mouse/stylus)
-canvas.addEventListener('pointerdown', handlePointerDown);
-canvas.addEventListener('pointermove', handlePointerMove);
-canvas.addEventListener('pointerup', handlePointerUp);
-
-// Touch events for mobile
-canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
-canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
-canvas.addEventListener('touchend', handlePointerUp, { passive: false });
-
-startButton.addEventListener('click', startGame);
+// ─── Buttons ──────────────────────────────────────────────────────────────────
+document.getElementById('startButton').addEventListener('click', startGame);
+document.getElementById('winPlayAgain').addEventListener('click', startGame);
+document.getElementById('losePlayAgain').addEventListener('click', startGame);
