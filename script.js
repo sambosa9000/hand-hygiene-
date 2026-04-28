@@ -3,16 +3,14 @@ const canvas  = document.getElementById('gameCanvas');
 const ctx     = canvas.getContext('2d');
 
 function resizeCanvas() {
-  const vp = window.visualViewport;
-  canvas.width  = vp ? vp.width  : window.innerWidth;
-  canvas.height = vp ? vp.height : window.innerHeight;
+  // Use the canvas's actual rendered size so it always matches CSS
+  canvas.width  = canvas.clientWidth  || window.innerWidth;
+  canvas.height = canvas.clientHeight || window.innerHeight;
 }
 resizeCanvas();
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', resizeCanvas);
-} else {
-  window.addEventListener('resize', resizeCanvas);
-}
+window.addEventListener('resize', resizeCanvas);
+// Also fire on orientation change with a small delay for the browser to settle
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 150));
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const overlay     = document.getElementById('overlay');
@@ -188,7 +186,7 @@ function createEntity() {
   const ss = Math.min(W(), H()) / 600; // speed scale
 
   // ↑ Speed increased ~15% from previous build
-  const vy = rand(-7.0, -9.0) * ss;
+  const vy = rand(-8.5, -10.5) * ss;
 
   let type = 'germ', color = germColors[Math.floor(rand(0, germColors.length))];
   if (dettol)      { type = 'dettol';    color = '#9fd2b7'; }
@@ -371,12 +369,12 @@ function update(dt) {
 
   // Spawn soap bubble every ~7 s
   state.lastBubbleSpawn += dt;
-  if (state.lastBubbleSpawn > 7000) {
+  if (state.lastBubbleSpawn > 12000) {
     state.entities.push(createBubble());
     state.lastBubbleSpawn = 0;
   }
 
-  const g = 0.07 * (H()/600);
+  const g = 0.065 * (H()/600);
 
   state.entities.forEach(e => {
     e.glowPhase += 0.05;
